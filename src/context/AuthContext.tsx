@@ -21,6 +21,7 @@ interface AuthContextType {
   signup: (email: string, password: string, merchantName?: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   updatePasswordWithRecovery: (newPassword: string) => Promise<{ success: boolean; error?: string; message?: string }>;
+  loginAsGuest: (guestOrg?: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -403,6 +404,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginAsGuest = async (guestOrg?: string) => {
+    setIsLoading(true);
+    setAuthError(null);
+    try {
+      const guestUser: MerchantUser = {
+        id: `guest_${Date.now().toString(36)}`,
+        email: 'guest.reviewer@traceid.io',
+        role: 'Guest FinTech Evaluator',
+        merchantName: guestOrg || 'Dhaka Retail Logistics (Guest Demo)',
+        organization: 'Interactive Prototype Sandbox',
+        lastSignInAt: new Date().toISOString()
+      };
+      setUser(guestUser);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(guestUser));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     setIsLoading(true);
     try {
@@ -439,6 +459,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signup,
         sendPasswordResetEmail,
         updatePasswordWithRecovery,
+        loginAsGuest,
         logout,
         clearError
       }}

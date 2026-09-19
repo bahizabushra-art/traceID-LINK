@@ -14,8 +14,21 @@ import {
   Info, 
   Cpu,
   Store,
-  ArrowRight
+  ArrowRight,
+  Download,
+  FileSpreadsheet,
+  RefreshCcw,
+  Check,
+  Zap,
+  CheckCheck
 } from 'lucide-react';
+import { 
+  parseAndReconcileUserFiles, 
+  downloadCsvFile, 
+  SAMPLE_MFS_CSV, 
+  SAMPLE_COURIER_CSV, 
+  ParsedCsvResult 
+} from '../../utils/csvReconEngine';
 
 export const DualFileReconcile: React.FC = () => {
   const {
@@ -42,14 +55,48 @@ export const DualFileReconcile: React.FC = () => {
   const [dragBank, setDragBank] = useState<boolean>(false);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
 
+  // User uploaded custom file contents
+  const [customMfsContent, setCustomMfsContent] = useState<string | null>(null);
+  const [customCourierContent, setCustomCourierContent] = useState<string | null>(null);
+  const [userParsedResult, setUserParsedResult] = useState<ParsedCsvResult | null>(null);
+
+  // Function to read and ingest custom user files
+  const processUploadedFile = (file: File, type: 'mfs' | 'courier' | 'bank') => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = (e.target?.result as string) || '';
+      if (type === 'mfs') {
+        setCustomMfsContent(text);
+        uploadTrackBMfsFile(file.name);
+        setUploadFeedback(`Ingested custom MFS statement: ${file.name} (${file.size} bytes)`);
+
+        // If courier is also provided, run parse engine
+        const courierText = customCourierContent || SAMPLE_COURIER_CSV;
+        const res = parseAndReconcileUserFiles(text, courierText, file.name, trackBCourierFileName || 'Steadfast_Remittance_Sample.csv');
+        setUserParsedResult(res);
+      } else if (type === 'courier') {
+        setCustomCourierContent(text);
+        uploadTrackBCourierFile(file.name);
+        setUploadFeedback(`Ingested custom Courier statement: ${file.name} (${file.size} bytes)`);
+
+        // If MFS is also provided, run parse engine
+        const mfsText = customMfsContent || SAMPLE_MFS_CSV;
+        const res = parseAndReconcileUserFiles(mfsText, text, trackBMfsFileName || 'bKash_Merchant_Sample.csv', file.name);
+        setUserParsedResult(res);
+      } else if (type === 'bank') {
+        uploadTrackBBankFile(file.name);
+        setUploadFeedback(`Attached Bank Statement for 3-way check: ${file.name}`);
+      }
+      setTimeout(() => setUploadFeedback(null), 4000);
+    };
+    reader.readAsText(file);
+  };
+
   const handleDropMfs = (e: React.DragEvent) => {
     e.preventDefault();
     setDragMfs(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const f = e.dataTransfer.files[0];
-      uploadTrackBMfsFile(f.name);
-      setUploadFeedback(`MFS statement uploaded: ${f.name}`);
-      setTimeout(() => setUploadFeedback(null), 3500);
+      processUploadedFile(e.dataTransfer.files[0], 'mfs');
     }
   };
 
@@ -57,10 +104,7 @@ export const DualFileReconcile: React.FC = () => {
     e.preventDefault();
     setDragCourier(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const f = e.dataTransfer.files[0];
-      uploadTrackBCourierFile(f.name);
-      setUploadFeedback(`Courier remittance uploaded: ${f.name}`);
-      setTimeout(() => setUploadFeedback(null), 3500);
+      processUploadedFile(e.dataTransfer.files[0], 'courier');
     }
   };
 
@@ -68,15 +112,28 @@ export const DualFileReconcile: React.FC = () => {
     e.preventDefault();
     setDragBank(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const f = e.dataTransfer.files[0];
-      uploadTrackBBankFile(f.name);
-      setUploadFeedback(`Bank statement uploaded (optional): ${f.name}`);
-      setTimeout(() => setUploadFeedback(null), 3500);
+      processUploadedFile(e.dataTransfer.files[0], 'bank');
     }
   };
 
-  // Convert Track B records into the exact same 11-column UnifiedAuditRow structure
+  // Revert custom upload back to the default benchmark sample
+  const handleResetToStandardSample = () => {
+    setCustomMfsContent(null);
+    setCustomCourierContent(null);
+    setUserParsedResult(null);
+    uploadTrackBMfsFile('bKash_Merchant_Sept08.csv');
+    uploadTrackBCourierFile('Steadfast_Remit_Sept08.csv');
+    setUploadFeedback('Reset to standard Dhaka Merchant benchmark dataset');
+    setTimeout(() => setUploadFeedback(null), 3000);
+  };
+
+  // Convert Track B records into the exact 11-column UnifiedAuditRow structure
   const unifiedTrackBRows: UnifiedAuditRow[] = useMemo(() => {
+    // If the user uploaded their own CSV statements, use the parsed mathematical rows!
+    if (userParsedResult && userParsedResult.rows.length > 0) {
+      return userParsedResult.rows;
+    }
+
     const isRet203Scanned = 
       Boolean(auditRecords.find(r => r.traceId === 'TR-RET-203')?.resolved) ||
       Boolean(returnParcels.find(p => p.traceId === 'TR-RET-203')?.scannedAtWarehouse);
@@ -118,178 +175,125 @@ export const DualFileReconcile: React.FC = () => {
         channelPartner: 'bKash Advance + Steadfast COD',
         grossOrderBDT: 2600,
         mfsCreditBDT: 150,
-        courierCodBDT: 2350,
-        deliveryFeeBDT: 130,
-        netBankSettledBDT: 2370,
-        varianceGapBDT: -100,
-        status: 'UNDER_REMITTED',
-        statusLabel: 'UNDER-REMITTED',
-        statusBadgeClasses: 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/40',
-        tooltip: 'Courier under-remitted COD funds by BDT 100 (Assessed unapproved transit insurance charge).',
-        notes: 'Steadfast booking manifest specified BDT 2,450 COD, but remittance batch paid only BDT 2,350.'
+        courierCodBDT: 2450,
+        deliveryFeeBDT: 100,
+        netBankSettledBDT: 2500,
+        varianceGapBDT: 0,
+        status: 'MATCHED',
+        statusLabel: 'MATCHED',
+        statusBadgeClasses: 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40',
+        tooltip: 'Twin-pulse reconciliation verified: BDT 150 delivery charge paid via bKash advance; BDT 2,450 remaining collected via Steadfast COD. Steadfast fee BDT 100 accounted for.',
+        notes: 'Both legs cross-matched. Customer paid partial advance to confirm order.'
       },
-      // 3. Table 5: Returned Products (Reverse)
-      (() => {
-        const ret203 = returnParcels.find(p => p.traceId === 'TR-RET-203');
-        const isScanned = isRet203Scanned;
-        const overcharge = ret203?.vector1OverchargeVarianceBDT ?? 30;
-        const billedFee = ret203?.returnFeeBDT ?? 90;
-        const capFee = ret203?.contractReturnFeeBDT ?? 60;
-        const isSla = ret203?.returnChargeReconStatus === 'SLA_BREACH_WAIVED';
-
-        if (isScanned) {
-          if (isSla) {
-            return {
-              id: 'sme-row-03',
-              traceId: 'TR-RET-203',
-              orderId: 'FB-ORD-5503',
-              trxId: 'RDX-RET-703',
-              rowCategoryKey: 'T5_RETURN' as const,
-              rowCategoryName: 'Table 5: Returned Products (Reverse)',
-              customerName: 'Rafiqul Islam',
-              customerPhone: '01811223344',
-              channelPartner: 'RedX Courier Return',
-              grossOrderBDT: 2200,
-              mfsCreditBDT: 0,
-              courierCodBDT: 'ABSENT' as const,
-              deliveryFeeBDT: billedFee,
-              netBankSettledBDT: 0,
-              varianceGapBDT: -billedFee,
-              status: 'RETURN_RECEIVED_IN_WAREHOUSE' as const,
-              statusLabel: 'RESTOCKED: SLA FEE WAIVED',
-              statusBadgeClasses: 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/40',
-              tooltip: `Return verified: Physical barcode scanned at warehouse gate. SLA threshold breached (${ret203?.deltaDaysInTransit || 7}d in hub) -> Return fee BDT 0 allowable. Full BDT ${billedFee} courier fee disputed.`,
-              notes: 'Gate-Keeper scanner confirmed package receipt. Inventory restocked. Courier return fee 100% blocked under SLA clause.'
-            };
-          } else if (overcharge > 0) {
-            return {
-              id: 'sme-row-03',
-              traceId: 'TR-RET-203',
-              orderId: 'FB-ORD-5503',
-              trxId: 'RDX-RET-703',
-              rowCategoryKey: 'T5_RETURN' as const,
-              rowCategoryName: 'Table 5: Returned Products (Reverse)',
-              customerName: 'Rafiqul Islam',
-              customerPhone: '01811223344',
-              channelPartner: 'RedX Courier Return',
-              grossOrderBDT: 2200,
-              mfsCreditBDT: 0,
-              courierCodBDT: 'ABSENT' as const,
-              deliveryFeeBDT: billedFee,
-              netBankSettledBDT: capFee,
-              varianceGapBDT: -overcharge,
-              status: 'RETURN_RECEIVED_IN_WAREHOUSE' as const,
-              statusLabel: `RESTOCKED: OVERCHARGE (+BDT ${overcharge})`,
-              statusBadgeClasses: 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/40',
-              tooltip: `Physical barcode scanned at warehouse gate & inventory restocked. HOWEVER: RedX billed BDT ${billedFee} return fee vs Contract Cap BDT ${capFee}. Overcharge of BDT ${overcharge} flagged for remittance clawback.`,
-              notes: `Physical receipt confirmed. Return charge financial reconciliation flagged +BDT ${overcharge} excess courier fee.`
-            };
-          } else {
-            return {
-              id: 'sme-row-03',
-              traceId: 'TR-RET-203',
-              orderId: 'FB-ORD-5503',
-              trxId: 'RDX-RET-703',
-              rowCategoryKey: 'T5_RETURN' as const,
-              rowCategoryName: 'Table 5: Returned Products (Reverse)',
-              customerName: 'Rafiqul Islam',
-              customerPhone: '01811223344',
-              channelPartner: 'RedX Courier Return',
-              grossOrderBDT: 2200,
-              mfsCreditBDT: 0,
-              courierCodBDT: 'ABSENT' as const,
-              deliveryFeeBDT: billedFee,
-              netBankSettledBDT: billedFee,
-              varianceGapBDT: 0,
-              status: 'RETURN_RECEIVED_IN_WAREHOUSE' as const,
-              statusLabel: 'RESTOCKED: CHARGE VALIDATED',
-              statusBadgeClasses: 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40',
-              tooltip: `Return verified: Physical barcode scanned at warehouse gate. Return fee of BDT ${billedFee} validated against contract.`,
-              notes: 'Gate-Keeper scanner confirmed package receipt at Tejgaon warehouse bay 2. Stock restored, hold cleared, return fee validated.'
-            };
-          }
-        }
-
-        return {
-          id: 'sme-row-03',
-          traceId: 'TR-RET-203',
-          orderId: 'FB-ORD-5503',
-          trxId: 'RDX-RET-703',
-          rowCategoryKey: 'T5_RETURN' as const,
-          rowCategoryName: 'Table 5: Returned Products (Reverse)',
-          customerName: 'Rafiqul Islam',
-          customerPhone: '01811223344',
-          channelPartner: 'RedX Courier Return',
-          grossOrderBDT: 2200,
-          mfsCreditBDT: 0,
-          courierCodBDT: 'ABSENT' as const,
-          deliveryFeeBDT: billedFee,
-          netBankSettledBDT: 'ABSENT' as const,
-          varianceGapBDT: -billedFee,
-          status: 'GHOST_RETURN_EXCEPTION' as const,
-          statusLabel: 'GHOST RETURN (DEBIT BLOCKED)',
-          statusBadgeClasses: 'bg-[#A855F7]/15 text-[#A855F7] border border-[#A855F7]/40 animate-pulse',
-          tooltip: `Parcel marked returned by courier, but return fee deducted with zero physical warehouse gate check-in. BDT ${billedFee} debit blocked.`,
-          notes: 'Debit hold enforced. Physical parcel missing from Tejgaon warehouse receiving log.'
-        };
-      })(),
-      // 4. Table 2: Cash on Delivery (100% COD)
+      // 3. Table 2: 100% COD
+      {
+        id: 'sme-row-03',
+        traceId: 'TR-SME-2026-P03',
+        orderId: 'FB-ORD-5503',
+        trxId: 'COD-ST-99120',
+        rowCategoryKey: 'T2_COD',
+        rowCategoryName: 'Table 2: 100% Cash On Delivery',
+        customerName: 'Farhana Yasmin',
+        customerPhone: '01933581029',
+        channelPartner: 'Steadfast Courier',
+        grossOrderBDT: 1850,
+        mfsCreditBDT: 0,
+        courierCodBDT: 1850,
+        deliveryFeeBDT: 100,
+        netBankSettledBDT: 1750,
+        varianceGapBDT: 0,
+        status: 'MATCHED',
+        statusLabel: 'MATCHED',
+        statusBadgeClasses: 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40',
+        tooltip: 'Full COD remittance cleared. Customer paid BDT 1,850 in cash; Steadfast remitted net BDT 1,750 after deducting BDT 100 delivery charge.',
+        notes: 'Standard 100% COD delivery in Chittagong region.'
+      },
+      // 4. Discrepancy 1: Under-remitted COD
       {
         id: 'sme-row-04',
-        traceId: 'TR-SME-COD-01',
-        orderId: 'FB-ORD-5499',
-        trxId: 'PTH-COD-9912',
+        traceId: 'TR-SME-2026-P04',
+        orderId: 'FB-ORD-5504',
+        trxId: 'COD-PT-44810',
         rowCategoryKey: 'T2_COD',
-        rowCategoryName: 'Table 2: Cash on Delivery (100% COD)',
-        customerName: 'Zubair Hossain',
-        customerPhone: '01933551122',
-        channelPartner: 'Pathao Courier COD',
-        grossOrderBDT: 1950,
+        rowCategoryName: 'Table 2: 100% Cash On Delivery',
+        customerName: 'Arif Chowdhury',
+        customerPhone: '01677291044',
+        channelPartner: 'Pathao Courier',
+        grossOrderBDT: 2400,
         mfsCreditBDT: 0,
-        courierCodBDT: 1950,
-        deliveryFeeBDT: 90,
-        netBankSettledBDT: 1860,
-        varianceGapBDT: 0,
-        status: 'MATCHED',
-        statusLabel: 'MATCHED',
-        statusBadgeClasses: 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40',
-        tooltip: '100% COD verified: Doorstep cash collected by rider. Pathao deducted BDT 90 freight, net BDT 1,860 remitted to merchant account.',
-        notes: 'Pathao remittance report ref PTH-SETTL-5499 cleared in Dutch-Bangla Bank.'
+        courierCodBDT: 2300,
+        deliveryFeeBDT: 120,
+        netBankSettledBDT: 2180,
+        varianceGapBDT: -100,
+        status: 'UNDER_REMITTED',
+        statusLabel: 'UNDER-REMITTED (-BDT 100)',
+        statusBadgeClasses: 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/40 font-bold',
+        tooltip: 'Discrepancy: Customer receipt shows BDT 2,400 collected; Pathao remittance report indicates only BDT 2,300 collected. Net gap of BDT 100 flagged.',
+        notes: 'Delivery agent remittance discrepancy. Clawback ticket #PT-CLAW-901 generated.'
       },
-      // 5. Table 4: Free Delivery (Zero Charge)
+      // 5. Discrepancy 2: Overcharge Delivery Fee
       {
         id: 'sme-row-05',
-        traceId: 'TR-SME-FRE-01',
-        orderId: 'FB-ORD-5488',
-        trxId: 'BK-FRE-7721',
-        rowCategoryKey: 'T4_FREE',
-        rowCategoryName: 'Table 4: Free Delivery (Zero Charge)',
-        customerName: 'Tania Sultana',
-        customerPhone: '01722334455',
-        channelPartner: 'Steadfast (Promo Subsidized)',
+        traceId: 'TR-SME-2026-P05',
+        orderId: 'FB-ORD-5505',
+        trxId: 'COD-ST-88219',
+        rowCategoryKey: 'T2_COD',
+        rowCategoryName: 'Table 2: 100% Cash On Delivery',
+        customerName: 'Shahadat Hossain',
+        customerPhone: '01555201948',
+        channelPartner: 'Steadfast Courier',
         grossOrderBDT: 1400,
-        mfsCreditBDT: 1400,
-        courierCodBDT: 0,
-        deliveryFeeBDT: 70,
-        netBankSettledBDT: 1330,
-        varianceGapBDT: 0,
-        status: 'MATCHED',
-        statusLabel: 'MATCHED',
-        statusBadgeClasses: 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40',
-        tooltip: 'Campaign promo verified: Steadfast deducted contractual BDT 70 delivery fee, subsidized by merchant Marketing Ledger EXP-MKTG-SHP-5488. Zero fee charged to customer.',
-        notes: 'Zero delivery fee charged to buyer on Facebook page. Steadfast courier shipping fee BDT 70 absorbed by promo budget; net BDT 1,330 realized.'
+        mfsCreditBDT: 0,
+        courierCodBDT: 1400,
+        deliveryFeeBDT: 130,
+        netBankSettledBDT: 1270,
+        varianceGapBDT: -30,
+        status: 'UNDER_REMITTED',
+        statusLabel: 'OVERCHARGE (-BDT 30)',
+        statusBadgeClasses: 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/40 font-bold',
+        tooltip: 'Overcharge: Standard inside-Dhaka parcel SLA contract rate is BDT 100, but Steadfast deducted BDT 130 freight fee. Excess BDT 30 deduction caught.',
+        notes: 'Courier billed remote zone rate for central Dhanmondi address. Overcharge dispute filed.'
       },
-      // 6. Table 1: Pre-Payment (100% MFS)
+      // 6. Return Parcel Scanned vs Unscanned
       {
         id: 'sme-row-06',
+        traceId: 'TR-RET-203',
+        orderId: 'FB-ORD-5507',
+        trxId: 'RET-ST-203',
+        rowCategoryKey: 'RETURN_SCANNED',
+        rowCategoryName: 'Return Parcel: Delivery Failed',
+        customerName: 'Nusrat Jahan',
+        customerPhone: '01711902847',
+        channelPartner: 'Steadfast Courier',
+        grossOrderBDT: 2100,
+        mfsCreditBDT: 0,
+        courierCodBDT: 0,
+        deliveryFeeBDT: 50,
+        netBankSettledBDT: isRet203Scanned ? -50 : -50,
+        varianceGapBDT: isRet203Scanned ? 0 : -2100,
+        status: isRet203Scanned ? 'RETURN_RECONCILED' : 'RETURN_DEFICIT',
+        statusLabel: isRet203Scanned ? 'RETURN INVENTORY VERIFIED' : 'GHOST RETURN (-BDT 2,100)',
+        statusBadgeClasses: isRet203Scanned 
+          ? 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40 font-bold'
+          : 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/40 font-black animate-pulse',
+        tooltip: isRet203Scanned
+          ? 'Physical parcel barcode verified at Dhaka warehouse scanner. Return return freight fee BDT 50 accounted for.'
+          : 'ALARM: Steadfast marked order as "Returned to Merchant", but parcel barcode has NOT been scanned in merchant warehouse. Inventory deficit of BDT 2,100 flagged.',
+        notes: isRet203Scanned
+          ? 'Barcode scanned by operator. Inventory restocked.'
+          : 'Ghost return audit protocol triggered. Courier SLA claim in progress.'
+      },
+      // 7. Table 1: Nagad Advance Payment
+      {
+        id: 'sme-row-07',
         traceId: 'TR-SME-2026-P06',
         orderId: 'FB-ORD-5506',
         trxId: 'NG-9K72MM091',
         rowCategoryKey: 'T1_PREPAID',
-        rowCategoryName: 'Table 1: Pre-Payment (100% MFS)',
+        rowCategoryName: 'Table 1: Pre-Payment (100% Nagad)',
         customerName: 'Mehedi Hasan',
-        customerPhone: '01822490182',
-        channelPartner: 'Nagad Merchant + RedX Courier',
+        customerPhone: '01799281039',
+        channelPartner: 'Nagad + RedX Courier',
         grossOrderBDT: 2450,
         mfsCreditBDT: 2450,
         courierCodBDT: 0,
@@ -303,7 +307,7 @@ export const DualFileReconcile: React.FC = () => {
         notes: 'Facebook messenger conversation order ref matched Nagad TrxID NG-9K72MM091. RedX parcel consignment RDX-90182 verified.'
       }
     ];
-  }, [auditRecords, returnParcels]);
+  }, [auditRecords, returnParcels, userParsedResult]);
 
   // Totals calculations
   const totalExpected = unifiedTrackBRows.reduce((acc, r) => acc + r.grossOrderBDT, 0);
@@ -334,7 +338,7 @@ export const DualFileReconcile: React.FC = () => {
               </div>
               <div className="p-3 rounded-xl bg-[#050505] border border-[#27272A] text-[#FFFFFF]">
                 <div className="font-bold text-[#22C55E]">[VECTOR DISCREPANCY AUDIT]</div>
-                Generating net cash settlements &amp; flagging unlinked F-commerce deposits...
+                Calculating Bank Sum balance: &Sigma;(MFS) + &Sigma;(COD) - &Sigma;(Fees) = Net Settled...
               </div>
             </div>
 
@@ -358,7 +362,7 @@ export const DualFileReconcile: React.FC = () => {
                   Category B: Track B SME
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#050505] text-[#FACC15] border border-[#FACC15]/40 font-bold">
-                  Dual-File Portal
+                  Dual-File Ingestion Portal
                 </span>
               </div>
               <h2 className="text-lg sm:text-xl font-black text-[#FFFFFF] font-mono tracking-tight mt-0.5">
@@ -367,11 +371,53 @@ export const DualFileReconcile: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-3.5 py-2 rounded-xl bg-[#050505] border border-[#27272A] text-xs font-mono text-[#A1A1AA] flex items-center gap-2">
-            <Info className="w-4 h-4 text-[#FACC15] shrink-0" />
-            <span>No checkout APIs or cron jobs required. Upload MFS &amp; Courier files together.</span>
+          {/* Download Sample CSV Templates */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => downloadCsvFile('bKash_Merchant_Statement_Sample.csv', SAMPLE_MFS_CSV)}
+              className="px-3 py-1.5 rounded-lg bg-[#050505] hover:bg-zinc-800 border border-[#27272A] text-[#FACC15] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+              title="Download sample bKash statement CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Sample MFS CSV</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadCsvFile('Steadfast_Remittance_Invoice_Sample.csv', SAMPLE_COURIER_CSV)}
+              className="px-3 py-1.5 rounded-lg bg-[#050505] hover:bg-zinc-800 border border-[#27272A] text-[#06B6D4] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+              title="Download sample Steadfast courier remittance CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Sample Courier CSV</span>
+            </button>
           </div>
         </div>
+
+        {/* Custom Data Ingestion Active Notification */}
+        {userParsedResult && (
+          <div className="mt-4 p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-600/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono text-xs text-emerald-200">
+            <div className="flex items-center gap-2">
+              <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div>
+                <strong className="text-white">Custom Files Parsed &amp; Reconciled:</strong> {userParsedResult.fileName} ({userParsedResult.rowCount} rows processed)
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-emerald-300">
+                Matched: {userParsedResult.matchedCount} | Discrepancies: {userParsedResult.discrepancyCount}
+              </span>
+              <button
+                type="button"
+                onClick={handleResetToStandardSample}
+                className="px-2.5 py-1 rounded bg-black hover:bg-zinc-900 border border-emerald-500/40 text-white hover:text-emerald-300 transition-colors flex items-center gap-1 text-[11px]"
+              >
+                <RefreshCcw className="w-3 h-3" />
+                <span>Reset Demo</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Triple Upload Dropzone (Side-by-Side: MFS, Courier, and Bank) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
@@ -417,10 +463,10 @@ export const DualFileReconcile: React.FC = () => {
                   type="button"
                   onClick={() => {
                     uploadTrackBMfsFile('bKash_Merchant_Sept08.csv');
-                    setUploadFeedback('Loaded bKash merchant statement');
+                    setUploadFeedback('Loaded bKash merchant statement sample');
                     setTimeout(() => setUploadFeedback(null), 3000);
                   }}
-                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#FACC15] border border-[#27272A] transition-colors text-[9px] font-bold"
+                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#FACC15] border border-[#27272A] transition-colors text-[9px] font-bold cursor-pointer"
                 >
                   bKash
                 </button>
@@ -428,26 +474,23 @@ export const DualFileReconcile: React.FC = () => {
                   type="button"
                   onClick={() => {
                     uploadTrackBMfsFile('Nagad_Merchant_Sept08.csv');
-                    setUploadFeedback('Loaded Nagad merchant statement');
+                    setUploadFeedback('Loaded Nagad merchant statement sample');
                     setTimeout(() => setUploadFeedback(null), 3000);
                   }}
-                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#FACC15] border border-[#27272A] transition-colors text-[9px] font-bold"
+                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#FACC15] border border-[#27272A] transition-colors text-[9px] font-bold cursor-pointer"
                 >
                   Nagad
                 </button>
               </div>
             </div>
 
-            <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop to update MFS statement">
+            <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop your actual MFS statement CSV">
               <input
                 type="file"
-                accept=".csv,.xlsx"
+                accept=".csv,.txt,.tsv"
                 onChange={e => {
                   if (e.target.files && e.target.files[0]) {
-                    const f = e.target.files[0];
-                    uploadTrackBMfsFile(f.name);
-                    setUploadFeedback(`Updated MFS Statement: ${f.name}`);
-                    setTimeout(() => setUploadFeedback(null), 3500);
+                    processUploadedFile(e.target.files[0], 'mfs');
                   }
                 }}
               />
@@ -496,10 +539,10 @@ export const DualFileReconcile: React.FC = () => {
                   type="button"
                   onClick={() => {
                     uploadTrackBCourierFile('Steadfast_Remit_Sept08.csv');
-                    setUploadFeedback('Loaded Steadfast Remittance file');
+                    setUploadFeedback('Loaded Steadfast Remittance sample');
                     setTimeout(() => setUploadFeedback(null), 3000);
                   }}
-                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#06B6D4] border border-[#27272A] transition-colors text-[9px] font-bold"
+                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#06B6D4] border border-[#27272A] transition-colors text-[9px] font-bold cursor-pointer"
                 >
                   Steadfast
                 </button>
@@ -507,26 +550,23 @@ export const DualFileReconcile: React.FC = () => {
                   type="button"
                   onClick={() => {
                     uploadTrackBCourierFile('Pathao_Settlement_Sept08.csv');
-                    setUploadFeedback('Loaded Pathao Settlement file');
+                    setUploadFeedback('Loaded Pathao Settlement sample');
                     setTimeout(() => setUploadFeedback(null), 3000);
                   }}
-                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#06B6D4] border border-[#27272A] transition-colors text-[9px] font-bold"
+                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#06B6D4] border border-[#27272A] transition-colors text-[9px] font-bold cursor-pointer"
                 >
                   Pathao
                 </button>
               </div>
             </div>
 
-            <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop to update Courier remittance">
+            <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop your actual Courier remittance CSV">
               <input
                 type="file"
-                accept=".csv,.xlsx"
+                accept=".csv,.txt,.tsv"
                 onChange={e => {
                   if (e.target.files && e.target.files[0]) {
-                    const f = e.target.files[0];
-                    uploadTrackBCourierFile(f.name);
-                    setUploadFeedback(`Updated Courier File: ${f.name}`);
-                    setTimeout(() => setUploadFeedback(null), 3500);
+                    processUploadedFile(e.target.files[0], 'courier');
                   }
                 }}
               />
@@ -580,7 +620,7 @@ export const DualFileReconcile: React.FC = () => {
                       setUploadFeedback('Detached optional bank statement');
                       setTimeout(() => setUploadFeedback(null), 3000);
                     }}
-                    className="text-[#EF4444] hover:underline z-10"
+                    className="text-[#EF4444] hover:underline z-10 cursor-pointer"
                   >
                     Remove
                   </button>
@@ -596,7 +636,7 @@ export const DualFileReconcile: React.FC = () => {
                       setUploadFeedback('Attached City Bank statement (Optional)');
                       setTimeout(() => setUploadFeedback(null), 3000);
                     }}
-                    className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#A1A1AA] hover:text-[#FFFFFF] border border-[#27272A] transition-colors text-[9px] font-bold z-10"
+                    className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#A1A1AA] hover:text-[#FFFFFF] border border-[#27272A] transition-colors text-[9px] font-bold z-10 cursor-pointer"
                   >
                     + Attach City Bank
                   </button>
@@ -607,13 +647,10 @@ export const DualFileReconcile: React.FC = () => {
             <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop to attach optional bank statement">
               <input
                 type="file"
-                accept=".csv,.pdf,.xlsx"
+                accept=".csv,.txt,.tsv"
                 onChange={e => {
                   if (e.target.files && e.target.files[0]) {
-                    const f = e.target.files[0];
-                    uploadTrackBBankFile(f.name);
-                    setUploadFeedback(`Updated Bank File: ${f.name}`);
-                    setTimeout(() => setUploadFeedback(null), 3500);
+                    processUploadedFile(e.target.files[0], 'bank');
                   }
                 }}
               />
@@ -638,7 +675,7 @@ export const DualFileReconcile: React.FC = () => {
           </div>
           <button
             onClick={() => setActivePage('return-policy')}
-            className="text-[#FACC15] hover:text-[#EAB308] underline text-[11px] font-semibold shrink-0"
+            className="text-[#FACC15] hover:text-[#EAB308] underline text-[11px] font-semibold shrink-0 cursor-pointer"
           >
             Open Return Policy &amp; Scanned Table →
           </button>
@@ -647,14 +684,14 @@ export const DualFileReconcile: React.FC = () => {
         {/* Action Trigger */}
         <div className="mt-5 pt-4 border-t border-[#27272A] flex flex-wrap items-center justify-between gap-4">
           <div className="text-xs font-mono text-[#A1A1AA]">
-            Mapping Matrix: <span className="text-[#FACC15] font-semibold">Facebook Order Inbox ↔ MFS Bank Statement ↔ Courier Remittance</span>
+            Mathematical Ledger: <span className="text-[#FACC15] font-semibold">Net Payout = &Sigma;(MFS) + &Sigma;(COD) - &Sigma;(Freight Fees)</span>
           </div>
 
           <button
             id="execute-dual-audit-btn"
             onClick={runTrackBDualAudit}
             disabled={!trackBMfsUploaded || !trackBCourierUploaded}
-            className="px-5 py-2.5 rounded-xl bg-[#FACC15] hover:bg-[#EAB308] text-[#050505] font-mono font-bold text-xs flex items-center gap-2 shadow-lg shadow-[#FACC15]/10 transition-all active:scale-95 disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl bg-[#FACC15] hover:bg-[#EAB308] text-[#050505] font-mono font-bold text-xs flex items-center gap-2 shadow-lg shadow-[#FACC15]/10 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
           >
             <Play className="w-4 h-4 fill-[#050505]" />
             <span>Execute Simultaneous Dual-File Reconciliation</span>
@@ -665,7 +702,7 @@ export const DualFileReconcile: React.FC = () => {
       {/* Synchronized Reconciled Audit Table */}
       {trackBAuditExecuted && (
         <UnifiedAuditResultsTable
-          currentCategory="Track B SME"
+          currentCategory={userParsedResult ? "Custom Merchant Upload" : "Track B SME"}
           rows={unifiedTrackBRows}
           totalExpectedVolumeBDT={totalExpected}
           totalSettledVolumeBDT={totalSettled}
