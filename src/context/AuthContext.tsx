@@ -16,7 +16,7 @@ interface AuthContextType {
   isSupabaseConnected: boolean;
   supabaseUrl: string;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (email: string, password: string) => Promise<{ success: boolean; error?: string; message?: string }>;
+  signup: (email: string, password: string, merchantName?: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -141,9 +141,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         if (error) {
-          setAuthError(error.message);
+          let userMsg = error.message;
+          if (error.message.toLowerCase().includes('invalid login credentials')) {
+            userMsg = 'Invalid credentials. If this email is not yet registered in Supabase, switch to "Register Merchant" above to create it.';
+          }
+          setAuthError(userMsg);
           setIsLoading(false);
-          return { success: false, error: error.message };
+          return { success: false, error: userMsg };
         }
 
         if (data.session && data.user) {
@@ -185,7 +189,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (email: string, password: string): Promise<{ success: boolean; error?: string; message?: string }> => {
+  const signup = async (email: string, password: string, merchantName?: string): Promise<{ success: boolean; error?: string; message?: string }> => {
     setIsLoading(true);
     setAuthError(null);
 
@@ -204,13 +208,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: msg };
       }
 
+      const orgName = merchantName?.trim() || email.split('@')[0];
+
       if (supabase && isConfigured) {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password: password.trim(),
           options: {
             data: {
-              merchant_name: email.split('@')[0],
+              merchant_name: orgName,
               role: 'Lead Finance Controller'
             }
           }
@@ -222,28 +228,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { success: false, error: error.message };
         }
 
-        if (data.session && data.user) {
-          setSession(data.session);
+        if (data.user) {
           const merchantUser: MerchantUser = {
             id: data.user.id,
             email: data.user.email || email,
             role: 'Lead Finance Controller',
-            merchantName: email.split('@')[0],
+            merchantName: orgName,
             organization: 'Dhaka Regional Operations',
             lastSignInAt: new Date().toISOString()
           };
+          if (data.session) {
+            setSession(data.session);
+          }
           setUser(merchantUser);
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merchantUser));
           setIsLoading(false);
-          return { success: true, message: 'Merchant account registered and signed in!' };
+          return { 
+            success: true, 
+            message: data.session 
+              ? 'Merchant account registered and signed in to Supabase!' 
+              : 'Merchant account registered in Supabase! (Check email to verify address if confirmation is enabled)'
+          };
         }
-
-        // Email confirmation flow
-        setIsLoading(false);
-        return {
-          success: true,
-          message: 'Account created! Please check your email inbox to confirm your Supabase registration.'
-        };
       }
 
       // Standalone registration
@@ -251,7 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: `usr_${Date.now().toString(36)}`,
         email: email.trim(),
         role: 'Lead Finance Controller',
-        merchantName: email.split('@')[0].toUpperCase(),
+        merchantName: orgName,
         organization: 'Dhaka Regional Operations (Supabase DB)',
         lastSignInAt: new Date().toISOString()
       };

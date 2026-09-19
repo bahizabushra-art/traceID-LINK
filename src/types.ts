@@ -2,6 +2,7 @@ export type TrackMode = 'track-a' | 'track-b';
 
 export type ActivePage = 
   | 'login'
+  | 'register'
   | 'orders'
   | 'audit'
   | 'reports'

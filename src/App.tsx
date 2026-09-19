@@ -36,8 +36,8 @@ const AppContent: React.FC = () => {
   }
 
   // Auth Gate: Merchants MUST log in before seeing the dashboard
-  if (!isAuthenticated || activePage === 'login' || activePage === 'portal-select') {
-    return <LoginGateway />;
+  if (!isAuthenticated || activePage === 'login' || activePage === 'register' || activePage === 'portal-select') {
+    return <LoginGateway initialMode={activePage === 'register' ? 'signup' : 'signin'} />;
   }
 
   // Unified 5-Page routing based on activePage & currentTrack

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useRecon } from '../context/ReconContext';
 import { 
@@ -18,25 +18,58 @@ import {
   EyeOff,
   AlertCircle,
   UserPlus,
-  LogIn
+  LogIn,
+  Building2,
+  Check
 } from 'lucide-react';
 
-export const LoginGateway: React.FC = () => {
-  const { login, signup, authError, clearError, isLoading: isAuthLoading, supabaseUrl } = useAuth();
+interface LoginGatewayProps {
+  initialMode?: 'signin' | 'signup';
+}
+
+export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signin' }) => {
+  const { login, signup, authError, clearError, isLoading: isAuthLoading } = useAuth();
   const { setActivePage, setCurrentTrack } = useRecon();
 
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
+  const [merchantName, setMerchantName] = useState('Dhaka Retail Enterprise Ltd');
   const [email, setEmail] = useState('bahizabushra@gmail.com');
   const [password, setPassword] = useState('SecureMerchant@2026');
+  const [confirmPassword, setConfirmPassword] = useState('SecureMerchant@2026');
   const [showPassword, setShowPassword] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<'track-a' | 'track-b'>('track-a');
   const [authStep, setAuthStep] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [formValidationWarning, setFormValidationWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAuthMode(initialMode);
+  }, [initialMode]);
+
+  const handleSwitchMode = (mode: 'signin' | 'signup') => {
+    setAuthMode(mode);
+    clearError();
+    setInfoMessage(null);
+    setFormValidationWarning(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
     setInfoMessage(null);
+    setFormValidationWarning(null);
+
+    // Validation for registration
+    if (authMode === 'signup') {
+      if (password !== confirmPassword) {
+        setFormValidationWarning('Passwords do not match. Please re-enter both passwords identically.');
+        return;
+      }
+      if (password.length < 6) {
+        setFormValidationWarning('Password must be at least 6 characters long.');
+        return;
+      }
+    }
 
     setAuthStep(
       authMode === 'signin'
@@ -56,28 +89,31 @@ export const LoginGateway: React.FC = () => {
         setAuthStep(null);
       }
     } else {
-      const res = await signup(email, password);
+      const res = await signup(email, password, merchantName);
       if (res.success) {
         if (res.message) {
           setInfoMessage(res.message);
         }
-        setAuthStep('Account confirmed. Entering workspace...');
+        setAuthStep('Account created successfully. Entering workspace...');
         setTimeout(() => {
           setCurrentTrack(selectedTrack);
           setActivePage('orders');
-        }, 800);
+        }, 900);
       } else {
         setAuthStep(null);
       }
     }
   };
 
-  const handleQuickFill = (demoEmail: string, demoPass: string, track: 'track-a' | 'track-b') => {
+  const handleQuickFill = (demoEmail: string, demoPass: string, track: 'track-a' | 'track-b', demoOrg?: string) => {
     setEmail(demoEmail);
     setPassword(demoPass);
+    setConfirmPassword(demoPass);
+    if (demoOrg) setMerchantName(demoOrg);
     setSelectedTrack(track);
     clearError();
     setInfoMessage(null);
+    setFormValidationWarning(null);
   };
 
   return (
@@ -103,7 +139,7 @@ export const LoginGateway: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Centered Login Card */}
+      {/* Main Centered Login / Registration Card */}
       <div className="w-full max-w-md my-auto py-6">
         <div className="bg-[#121212] border border-[#27272A] rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black relative z-10">
           {/* Cryptographic Linked Nodes Branding Header */}
@@ -117,7 +153,6 @@ export const LoginGateway: React.FC = () => {
                 strokeLinecap="round" 
                 strokeLinejoin="round"
               >
-                {/* Cryptographic Linked Nodes */}
                 <circle cx="6" cy="6" r="3" />
                 <circle cx="18" cy="6" r="3" />
                 <circle cx="6" cy="18" r="3" />
@@ -137,48 +172,67 @@ export const LoginGateway: React.FC = () => {
               Intelligent FinTech Reconciliation Middleware
             </p>
 
-            {/* Auth Mode Toggle: Sign In vs Sign Up */}
-            <div className="mt-4 p-1 bg-[#050505] border border-[#27272A] rounded-xl flex items-center">
+            {/* Clear Primary Navigation Tabs: Sign In vs Create New Account */}
+            <div className="mt-5 p-1 bg-[#050505] border border-[#27272A] rounded-xl grid grid-cols-2 gap-1">
               <button
+                id="auth-tab-signin"
                 type="button"
-                onClick={() => {
-                  setAuthMode('signin');
-                  clearError();
-                  setInfoMessage(null);
-                }}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                onClick={() => handleSwitchMode('signin')}
+                className={`py-2 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   authMode === 'signin'
-                    ? 'bg-[#FACC15] text-[#050505] shadow-sm'
-                    : 'text-[#A1A1AA] hover:text-white'
+                    ? 'bg-[#FACC15] text-[#050505] shadow-md'
+                    : 'text-[#A1A1AA] hover:text-white hover:bg-zinc-900'
                 }`}
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span>Sign In</span>
+                <span>1. Sign In</span>
               </button>
+
               <button
+                id="auth-tab-signup"
                 type="button"
-                onClick={() => {
-                  setAuthMode('signup');
-                  clearError();
-                  setInfoMessage(null);
-                }}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                onClick={() => handleSwitchMode('signup')}
+                className={`py-2 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer relative ${
                   authMode === 'signup'
-                    ? 'bg-[#FACC15] text-[#050505] shadow-sm'
-                    : 'text-[#A1A1AA] hover:text-white'
+                    ? 'bg-[#FACC15] text-[#050505] shadow-md'
+                    : 'text-[#A1A1AA] hover:text-white hover:bg-zinc-900'
                 }`}
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>Register Merchant</span>
+                <span>2. New Account</span>
+                <span className={`text-[9px] px-1 rounded uppercase tracking-wider font-extrabold ${
+                  authMode === 'signup' ? 'bg-black text-[#FACC15]' : 'bg-emerald-500/20 text-emerald-300'
+                }`}>
+                  Sign Up
+                </span>
               </button>
             </div>
           </div>
 
+          {/* Form Header Banner */}
+          <div className="mb-4 pb-2 border-b border-[#27272A]/70 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                {authMode === 'signin' ? 'Sign In to Workspace' : 'Create Merchant Account'}
+              </span>
+              <p className="text-[11px] text-zinc-400">
+                {authMode === 'signin' 
+                  ? 'Access your bKash, Nagad & Courier settlement portal' 
+                  : 'Register a new merchant user in Supabase PostgreSQL Auth'}
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 border border-zinc-700">
+                {authMode === 'signin' ? 'EXISTING' : 'NEW USER'}
+              </span>
+            </div>
+          </div>
+
           {/* Error Banner */}
-          {authError && (
+          {(authError || formValidationWarning) && (
             <div className="mb-4 p-3 rounded-xl bg-rose-950/80 border border-rose-700/80 text-xs text-rose-200 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <div className="leading-snug">{authError}</div>
+              <div className="leading-snug">{formValidationWarning || authError}</div>
             </div>
           )}
 
@@ -190,8 +244,31 @@ export const LoginGateway: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Input 1: Merchant Email */}
+          <form onSubmit={handleSubmit} className="space-y-3.5">
+            {/* Field for New Account: Merchant Business / Organization Name */}
+            {authMode === 'signup' && (
+              <div>
+                <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA] mb-1.5">
+                  Business / Company Name
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="signup-merchant-org"
+                    type="text"
+                    value={merchantName}
+                    onChange={(e) => setMerchantName(e.target.value)}
+                    required
+                    placeholder="e.g., Apex Footwear / Dhaka Retail"
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border border-[#27272A] rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#FACC15] focus:ring-1 focus:ring-[#FACC15] transition-all"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Field: Merchant Email */}
             <div>
               <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA] mb-1.5">
                 Merchant Corporate Email
@@ -201,7 +278,7 @@ export const LoginGateway: React.FC = () => {
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
-                  id="login-merchant-email"
+                  id="auth-merchant-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -212,11 +289,11 @@ export const LoginGateway: React.FC = () => {
               </div>
             </div>
 
-            {/* Input 2: Password */}
+            {/* Field: Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
-                  Merchant Password
+                  {authMode === 'signin' ? 'Merchant Password' : 'Create Password (min 6 chars)'}
                 </label>
                 <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
                   <Lock className="w-3 h-3" />
@@ -228,7 +305,7 @@ export const LoginGateway: React.FC = () => {
                   <Key className="w-4 h-4" />
                 </div>
                 <input
-                  id="login-merchant-password"
+                  id="auth-merchant-password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -246,6 +323,41 @@ export const LoginGateway: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            {/* Field for New Account: Confirm Password */}
+            {authMode === 'signup' && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                    Confirm Password
+                  </label>
+                  {confirmPassword && password === confirmPassword && (
+                    <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Passwords match
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
+                    <Key className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="signup-confirm-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    placeholder="••••••••••••"
+                    className={`w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none transition-all ${
+                      confirmPassword && password !== confirmPassword 
+                        ? 'border-rose-500 focus:border-rose-500' 
+                        : 'border-[#27272A] focus:border-[#FACC15]'
+                    }`}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Operational Suite Mode Quick-Select */}
             <div className="pt-1">
@@ -315,24 +427,53 @@ export const LoginGateway: React.FC = () => {
             {(isAuthLoading || authStep) && (
               <div className="p-3 rounded-lg bg-[#050505] border border-[#FACC15]/60 text-xs font-mono text-[#FACC15] flex items-center gap-2.5 animate-pulse">
                 <div className="w-3.5 h-3.5 border-2 border-[#FACC15] border-t-transparent rounded-full animate-spin" />
-                <span className="truncate">{authStep || 'Authenticating with Supabase...'}</span>
+                <span className="truncate">{authStep || 'Communicating with Supabase PostgreSQL Auth...'}</span>
               </div>
             )}
 
-            {/* Action Button */}
+            {/* Primary Action Button */}
             <button
               id="login-access-btn"
               type="submit"
               disabled={isAuthLoading}
               className="w-full py-3 px-4 rounded-xl bg-[#FACC15] hover:bg-[#EAB308] text-[#050505] font-bold text-sm tracking-wide shadow-lg shadow-[#FACC15]/20 hover:shadow-[#FACC15]/30 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer font-sans disabled:opacity-50"
             >
-              <span>{authMode === 'signin' ? 'LOGIN & ACCESS DASHBOARD' : 'REGISTER & ACCESS DASHBOARD'}</span>
+              <span>{authMode === 'signin' ? 'LOGIN & ACCESS DASHBOARD' : 'REGISTER NEW ACCOUNT IN SUPABASE'}</span>
               <ArrowRight className="w-4 h-4 text-[#050505] stroke-[2.5]" />
             </button>
           </form>
 
+          {/* Quick Switch Link between Sign In and Create New Account */}
+          <div className="mt-4 pt-3 border-t border-[#27272A] text-center">
+            {authMode === 'signin' ? (
+              <div className="text-xs text-zinc-400 font-mono">
+                Don't have a merchant account yet?{' '}
+                <button
+                  id="switch-to-signup-link"
+                  type="button"
+                  onClick={() => handleSwitchMode('signup')}
+                  className="text-[#FACC15] font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+                >
+                  Create New Account here &rarr;
+                </button>
+              </div>
+            ) : (
+              <div className="text-xs text-zinc-400 font-mono">
+                Already registered with Supabase?{' '}
+                <button
+                  id="switch-to-signin-link"
+                  type="button"
+                  onClick={() => handleSwitchMode('signin')}
+                  className="text-[#FACC15] font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+                >
+                  Sign In to existing account &rarr;
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Security & Database Status Footer */}
-          <div className="mt-5 pt-3.5 border-t border-[#27272A] flex items-center justify-between text-[11px] font-mono text-[#A1A1AA]">
+          <div className="mt-4 pt-3 border-t border-[#27272A]/80 flex items-center justify-between text-[11px] font-mono text-[#A1A1AA]">
             <div className="flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-[#22C55E]" />
               <span>Supabase Auth Protected</span>
@@ -346,12 +487,12 @@ export const LoginGateway: React.FC = () => {
         <div className="mt-4 p-3 rounded-xl bg-[#121212]/70 border border-[#27272A] text-xs font-mono text-[#A1A1AA] space-y-1.5 text-center">
           <div className="flex items-center justify-center gap-1.5 text-slate-300">
             <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
-            <span className="font-bold">Merchant Demo Credentials:</span>
+            <span className="font-bold">Merchant Demo Fill:</span>
           </div>
           <div className="flex items-center justify-center gap-3 pt-0.5">
             <button
               type="button"
-              onClick={() => handleQuickFill('bahizabushra@gmail.com', 'SecureMerchant@2026', 'track-a')}
+              onClick={() => handleQuickFill('bahizabushra@gmail.com', 'SecureMerchant@2026', 'track-a', 'Daraz Enterprise Hub')}
               className="text-[#FACC15] hover:underline cursor-pointer"
             >
               bahizabushra@gmail.com (Track A)
@@ -359,7 +500,7 @@ export const LoginGateway: React.FC = () => {
             <span className="text-zinc-700">|</span>
             <button
               type="button"
-              onClick={() => handleQuickFill('sme.finance@merchant.bd', 'DhakaFintech@2026', 'track-b')}
+              onClick={() => handleQuickFill('sme.finance@merchant.bd', 'DhakaFintech@2026', 'track-b', 'Dhaka SME Store')}
               className="text-[#FACC15] hover:underline cursor-pointer"
             >
               sme.finance@merchant.bd (Track B)
@@ -373,7 +514,7 @@ export const LoginGateway: React.FC = () => {
         <div>
           <span>TraceID Link &copy; 2026</span>
           <span className="mx-2 text-zinc-700">|</span>
-          <span>FinTech Middleware for bKash, Nagad, Pathao & Steadfast</span>
+          <span>For Online Businesses</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[#22C55E] flex items-center gap-1">

@@ -2,12 +2,13 @@ import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-
 
 // Supabase Project Endpoint inferred from Supabase PostgreSQL host
 const DEFAULT_SUPABASE_URL = 'https://gyqbclwyduyqpduxiesb.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cWJjbHd5ZHV5cXBkdXhpZXNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk4MjU0NzgsImV4cCI6MjEwNTQwMTQ3OH0.-U72mklHY52Hzsv4OCEITG0btOLmJQNNSNvAK7QakWk';
 
 export const SUPABASE_URL = 
   ((import.meta as any).env?.VITE_SUPABASE_URL as string) || DEFAULT_SUPABASE_URL;
 
 export const SUPABASE_ANON_KEY = 
-  ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string) || '';
+  ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string) || DEFAULT_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 20);
