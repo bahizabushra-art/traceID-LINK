@@ -15,8 +15,12 @@ interface AuthContextType {
   authError: string | null;
   isSupabaseConnected: boolean;
   supabaseUrl: string;
+  isRecoveryMode: boolean;
+  setIsRecoveryMode: (val: boolean) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (email: string, password: string, merchantName?: string) => Promise<{ success: boolean; error?: string; message?: string }>;
+  sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; error?: string; message?: string }>;
+  updatePasswordWithRecovery: (newPassword: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -30,12 +34,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isRecoveryMode, setIsRecoveryMode] = useState<boolean>(false);
 
   const isConfigured = isSupabaseConfigured();
 
-  // Initialize session on mount
+  // Initialize session on mount & check for recovery hashes
   useEffect(() => {
     let mounted = true;
+
+    const checkRecoveryHash = () => {
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash || '';
+        if (
+          hash.includes('type=recovery') || 
+          hash.includes('access_token=') || 
+          hash.includes('recovery')
+        ) {
+          setIsRecoveryMode(true);
+        }
+      }
+    };
+
+    checkRecoveryHash();
+    window.addEventListener('hashchange', checkRecoveryHash);
 
     const initAuth = async () => {
       try {
@@ -83,8 +104,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen to Supabase auth state changes if configured
     let authSubscription: { unsubscribe: () => void } | null = null;
     if (supabase && isConfigured) {
-      const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
         if (!mounted) return;
+
+        // Catch Supabase PASSWORD_RECOVERY event triggered when clicking the email verification link
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsRecoveryMode(true);
+        }
+
         setSession(newSession);
         if (newSession?.user) {
           const merchantUser: MerchantUser = {
@@ -97,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(merchantUser);
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merchantUser));
-        } else {
+        } else if (event === 'SIGNED_OUT') {
           setUser(null);
           localStorage.removeItem(LOCAL_STORAGE_KEY);
         }
@@ -107,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       mounted = false;
+      window.removeEventListener('hashchange', checkRecoveryHash);
       if (authSubscription) {
         authSubscription.unsubscribe();
       }
@@ -273,6 +301,108 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const sendPasswordResetEmail = async (email: string): Promise<{ success: boolean; error?: string; message?: string }> => {
+    setIsLoading(true);
+    setAuthError(null);
+
+    try {
+      if (!email || !email.includes('@')) {
+        const msg = 'Please enter a valid corporate email address.';
+        setAuthError(msg);
+        setIsLoading(false);
+        return { success: false, error: msg };
+      }
+
+      const redirectUrl = typeof window !== 'undefined' 
+        ? `${window.location.origin}/#recovery`
+        : undefined;
+
+      if (supabase && isConfigured) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: redirectUrl
+        });
+
+        if (error) {
+          setAuthError(error.message);
+          setIsLoading(false);
+          return { success: false, error: error.message };
+        }
+
+        setIsLoading(false);
+        return {
+          success: true,
+          message: `Password reset instructions sent to ${email.trim()}. Please check your email inbox and click the verification link to regain account access.`
+        };
+      }
+
+      // Standalone simulation fallback
+      setIsLoading(false);
+      return {
+        success: true,
+        message: `Password recovery initiated for ${email.trim()}. You may proceed to set a new password.`
+      };
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to dispatch password reset email. Please try again.';
+      setAuthError(msg);
+      setIsLoading(false);
+      return { success: false, error: msg };
+    }
+  };
+
+  const updatePasswordWithRecovery = async (newPassword: string): Promise<{ success: boolean; error?: string; message?: string }> => {
+    setIsLoading(true);
+    setAuthError(null);
+
+    try {
+      if (!newPassword || newPassword.length < 6) {
+        const msg = 'New password must be at least 6 characters long.';
+        setAuthError(msg);
+        setIsLoading(false);
+        return { success: false, error: msg };
+      }
+
+      if (supabase && isConfigured) {
+        const { data, error } = await supabase.auth.updateUser({
+          password: newPassword.trim()
+        });
+
+        if (error) {
+          setAuthError(error.message);
+          setIsLoading(false);
+          return { success: false, error: error.message };
+        }
+
+        if (data.user) {
+          const merchantUser: MerchantUser = {
+            id: data.user.id,
+            email: data.user.email || 'merchant@corporate.com',
+            role: 'Lead Finance Controller',
+            merchantName: data.user.user_metadata?.merchant_name || 'Enterprise Merchant Ltd',
+            organization: 'Dhaka Regional Operations',
+            lastSignInAt: new Date().toISOString()
+          };
+          setUser(merchantUser);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merchantUser));
+        }
+      }
+
+      setIsRecoveryMode(false);
+      if (typeof window !== 'undefined' && window.location.hash.includes('recovery')) {
+        window.location.hash = '';
+      }
+      setIsLoading(false);
+      return {
+        success: true,
+        message: 'Password updated successfully! Your merchant account access has been restored.'
+      };
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to update password. Please request a new recovery link.';
+      setAuthError(msg);
+      setIsLoading(false);
+      return { success: false, error: msg };
+    }
+  };
+
   const logout = async () => {
     setIsLoading(true);
     try {
@@ -303,8 +433,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authError,
         isSupabaseConnected: Boolean(SUPABASE_URL),
         supabaseUrl: SUPABASE_URL,
+        isRecoveryMode,
+        setIsRecoveryMode,
         login,
         signup,
+        sendPasswordResetEmail,
+        updatePasswordWithRecovery,
         logout,
         clearError
       }}

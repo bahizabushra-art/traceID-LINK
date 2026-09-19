@@ -5,14 +5,10 @@ import {
   Lock, 
   ArrowRight, 
   ShieldCheck, 
-  Server, 
-  Layers, 
-  Store, 
   Key, 
   Mail, 
   CheckCircle2,
   Sparkles,
-  Cpu,
   Database,
   Eye,
   EyeOff,
@@ -20,18 +16,34 @@ import {
   UserPlus,
   LogIn,
   Building2,
-  Check
+  Check,
+  RefreshCw,
+  ArrowLeft,
+  KeyRound,
+  Send
 } from 'lucide-react';
 
 interface LoginGatewayProps {
-  initialMode?: 'signin' | 'signup';
+  initialMode?: 'signin' | 'signup' | 'forgot' | 'recovery';
 }
 
 export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signin' }) => {
-  const { login, signup, authError, clearError, isLoading: isAuthLoading } = useAuth();
+  const { 
+    login, 
+    signup, 
+    sendPasswordResetEmail, 
+    updatePasswordWithRecovery,
+    authError, 
+    clearError, 
+    isLoading: isAuthLoading,
+    isRecoveryMode,
+    setIsRecoveryMode
+  } = useAuth();
   const { setActivePage, setCurrentTrack } = useRecon();
 
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'forgot' | 'recovery'>(
+    isRecoveryMode ? 'recovery' : initialMode
+  );
   const [merchantName, setMerchantName] = useState('Dhaka Retail Enterprise Ltd');
   const [email, setEmail] = useState('bahizabushra@gmail.com');
   const [password, setPassword] = useState('SecureMerchant@2026');
@@ -42,15 +54,24 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [formValidationWarning, setFormValidationWarning] = useState<string | null>(null);
 
+  // If Supabase triggered password recovery or URL hash has recovery token, switch to recovery view
   useEffect(() => {
-    setAuthMode(initialMode);
-  }, [initialMode]);
+    if (isRecoveryMode) {
+      setAuthMode('recovery');
+      setInfoMessage('Authenticated recovery session detected. Please enter your new password to regain access.');
+    } else {
+      setAuthMode(initialMode);
+    }
+  }, [initialMode, isRecoveryMode]);
 
-  const handleSwitchMode = (mode: 'signin' | 'signup') => {
+  const handleSwitchMode = (mode: 'signin' | 'signup' | 'forgot' | 'recovery') => {
     setAuthMode(mode);
     clearError();
     setInfoMessage(null);
     setFormValidationWarning(null);
+    if (mode !== 'recovery') {
+      setIsRecoveryMode(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,7 +80,45 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
     setInfoMessage(null);
     setFormValidationWarning(null);
 
-    // Validation for registration
+    // 1. FORGOT PASSWORD REQUEST
+    if (authMode === 'forgot') {
+      setAuthStep('Dispatching cryptographic recovery link via Supabase Auth...');
+      const res = await sendPasswordResetEmail(email);
+      if (res.success) {
+        setInfoMessage(res.message || 'Password reset link sent! Check your inbox.');
+        setAuthStep(null);
+      } else {
+        setAuthStep(null);
+      }
+      return;
+    }
+
+    // 2. PASSWORD RECOVERY / NEW PASSWORD SUBMISSION
+    if (authMode === 'recovery') {
+      if (password !== confirmPassword) {
+        setFormValidationWarning('Passwords do not match. Please ensure both fields match.');
+        return;
+      }
+      if (password.length < 6) {
+        setFormValidationWarning('New password must be at least 6 characters long.');
+        return;
+      }
+      setAuthStep('Updating password in Supabase PostgreSQL cluster...');
+      const res = await updatePasswordWithRecovery(password);
+      if (res.success) {
+        setInfoMessage(res.message || 'Password successfully updated!');
+        setAuthStep('Access restored. Redirecting to reconciliation dashboard...');
+        setTimeout(() => {
+          setCurrentTrack(selectedTrack);
+          setActivePage('orders');
+        }, 1000);
+      } else {
+        setAuthStep(null);
+      }
+      return;
+    }
+
+    // 3. REGISTRATION / SIGNUP
     if (authMode === 'signup') {
       if (password !== confirmPassword) {
         setFormValidationWarning('Passwords do not match. Please re-enter both passwords identically.');
@@ -69,26 +128,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
         setFormValidationWarning('Password must be at least 6 characters long.');
         return;
       }
-    }
-
-    setAuthStep(
-      authMode === 'signin'
-        ? 'Verifying merchant credentials against Supabase Auth...'
-        : 'Registering new merchant profile in Supabase database...'
-    );
-
-    if (authMode === 'signin') {
-      const res = await login(email, password);
-      if (res.success) {
-        setAuthStep('Access granted. Initializing Dhaka Bank reconciliation ledger...');
-        setTimeout(() => {
-          setCurrentTrack(selectedTrack);
-          setActivePage('orders');
-        }, 500);
-      } else {
-        setAuthStep(null);
-      }
-    } else {
+      setAuthStep('Registering new merchant profile in Supabase database...');
       const res = await signup(email, password, merchantName);
       if (res.success) {
         if (res.message) {
@@ -102,6 +142,20 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
       } else {
         setAuthStep(null);
       }
+      return;
+    }
+
+    // 4. SIGN IN
+    setAuthStep('Verifying merchant credentials against Supabase Auth...');
+    const res = await login(email, password);
+    if (res.success) {
+      setAuthStep('Access granted. Initializing Dhaka Bank reconciliation ledger...');
+      setTimeout(() => {
+        setCurrentTrack(selectedTrack);
+        setActivePage('orders');
+      }, 500);
+    } else {
+      setAuthStep(null);
     }
   };
 
@@ -139,7 +193,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
         </div>
       </div>
 
-      {/* Main Centered Login / Registration Card */}
+      {/* Main Centered Login / Registration / Recovery Card */}
       <div className="w-full max-w-md my-auto py-6">
         <div className="bg-[#121212] border border-[#27272A] rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black relative z-10">
           {/* Cryptographic Linked Nodes Branding Header */}
@@ -172,58 +226,69 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
               Intelligent FinTech Reconciliation Middleware
             </p>
 
-            {/* Clear Primary Navigation Tabs: Sign In vs Create New Account */}
-            <div className="mt-5 p-1 bg-[#050505] border border-[#27272A] rounded-xl grid grid-cols-2 gap-1">
-              <button
-                id="auth-tab-signin"
-                type="button"
-                onClick={() => handleSwitchMode('signin')}
-                className={`py-2 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  authMode === 'signin'
-                    ? 'bg-[#FACC15] text-[#050505] shadow-md'
-                    : 'text-[#A1A1AA] hover:text-white hover:bg-zinc-900'
-                }`}
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>1. Sign In</span>
-              </button>
+            {/* Mode Switcher Bar */}
+            {authMode !== 'recovery' && (
+              <div className="mt-5 p-1 bg-[#050505] border border-[#27272A] rounded-xl grid grid-cols-2 gap-1">
+                <button
+                  id="auth-tab-signin"
+                  type="button"
+                  onClick={() => handleSwitchMode('signin')}
+                  className={`py-2 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    authMode === 'signin' || authMode === 'forgot'
+                      ? 'bg-[#FACC15] text-[#050505] shadow-md'
+                      : 'text-[#A1A1AA] hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>1. Sign In</span>
+                </button>
 
-              <button
-                id="auth-tab-signup"
-                type="button"
-                onClick={() => handleSwitchMode('signup')}
-                className={`py-2 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer relative ${
-                  authMode === 'signup'
-                    ? 'bg-[#FACC15] text-[#050505] shadow-md'
-                    : 'text-[#A1A1AA] hover:text-white hover:bg-zinc-900'
-                }`}
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>2. New Account</span>
-                <span className={`text-[9px] px-1 rounded uppercase tracking-wider font-extrabold ${
-                  authMode === 'signup' ? 'bg-black text-[#FACC15]' : 'bg-emerald-500/20 text-emerald-300'
-                }`}>
-                  Sign Up
-                </span>
-              </button>
-            </div>
+                <button
+                  id="auth-tab-signup"
+                  type="button"
+                  onClick={() => handleSwitchMode('signup')}
+                  className={`py-2 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer relative ${
+                    authMode === 'signup'
+                      ? 'bg-[#FACC15] text-[#050505] shadow-md'
+                      : 'text-[#A1A1AA] hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>2. New Account</span>
+                  <span className={`text-[9px] px-1 rounded uppercase tracking-wider font-extrabold ${
+                    authMode === 'signup' ? 'bg-black text-[#FACC15]' : 'bg-emerald-500/20 text-emerald-300'
+                  }`}>
+                    Sign Up
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Form Header Banner */}
           <div className="mb-4 pb-2 border-b border-[#27272A]/70 flex items-center justify-between">
             <div>
-              <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                {authMode === 'signin' ? 'Sign In to Workspace' : 'Create Merchant Account'}
+              <span className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                {authMode === 'forgot' && <KeyRound className="w-3.5 h-3.5 text-[#FACC15]" />}
+                {authMode === 'recovery' && <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />}
+                {authMode === 'signin' && 'Sign In to Workspace'}
+                {authMode === 'signup' && 'Create Merchant Account'}
+                {authMode === 'forgot' && 'Reset Merchant Password'}
+                {authMode === 'recovery' && 'Set New Password'}
               </span>
               <p className="text-[11px] text-zinc-400">
-                {authMode === 'signin' 
-                  ? 'Access your bKash, Nagad & Courier settlement portal' 
-                  : 'Register a new merchant user in Supabase PostgreSQL Auth'}
+                {authMode === 'signin' && 'Access your bKash, Nagad & Courier settlement portal'}
+                {authMode === 'signup' && 'Register a new merchant user in Supabase PostgreSQL Auth'}
+                {authMode === 'forgot' && 'Dispatch an authenticated Supabase recovery link to your inbox'}
+                {authMode === 'recovery' && 'Configure your new password to regain access to the portal'}
               </p>
             </div>
             <div className="text-right">
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 border border-zinc-700">
-                {authMode === 'signin' ? 'EXISTING' : 'NEW USER'}
+                {authMode === 'signin' && 'EXISTING'}
+                {authMode === 'signup' && 'NEW USER'}
+                {authMode === 'forgot' && 'RECOVERY'}
+                {authMode === 'recovery' && 'RESET'}
               </span>
             </div>
           </div>
@@ -245,183 +310,356 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
           )}
 
           <form onSubmit={handleSubmit} className="space-y-3.5">
-            {/* Field for New Account: Merchant Business / Organization Name */}
-            {authMode === 'signup' && (
-              <div>
-                <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA] mb-1.5">
-                  Business / Company Name
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
-                    <Building2 className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="signup-merchant-org"
-                    type="text"
-                    value={merchantName}
-                    onChange={(e) => setMerchantName(e.target.value)}
-                    required
-                    placeholder="e.g., Apex Footwear / Dhaka Retail"
-                    className="w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border border-[#27272A] rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#FACC15] focus:ring-1 focus:ring-[#FACC15] transition-all"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Field: Merchant Email */}
-            <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA] mb-1.5">
-                Merchant Corporate Email
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <input
-                  id="auth-merchant-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="merchant@corporate.com"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border border-[#27272A] rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#FACC15] focus:ring-1 focus:ring-[#FACC15] transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Field: Password */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
-                  {authMode === 'signin' ? 'Merchant Password' : 'Create Password (min 6 chars)'}
-                </label>
-                <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  Supabase Encrypted
-                </span>
-              </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
-                  <Key className="w-4 h-4" />
-                </div>
-                <input
-                  id="auth-merchant-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  placeholder="••••••••••••"
-                  className="w-full pl-10 pr-10 py-2.5 bg-[#050505] border border-[#27272A] rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#FACC15] focus:ring-1 focus:ring-[#FACC15] transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(prev => !prev)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300 cursor-pointer"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Field for New Account: Confirm Password */}
-            {authMode === 'signup' && (
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
-                    Confirm Password
+            {/* VIEW A: FORGOT PASSWORD REQUEST FORM */}
+            {authMode === 'forgot' && (
+              <>
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA] mb-1.5">
+                    Registered Corporate Email
                   </label>
-                  {confirmPassword && password === confirmPassword && (
-                    <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Passwords match
-                    </span>
-                  )}
-                </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
-                    <Key className="w-4 h-4" />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
+                      <Mail className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="forgot-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      placeholder="merchant@corporate.com"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border border-[#27272A] rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#FACC15] focus:ring-1 focus:ring-[#FACC15] transition-all"
+                    />
                   </div>
-                  <input
-                    id="signup-confirm-password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    placeholder="••••••••••••"
-                    className={`w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none transition-all ${
-                      confirmPassword && password !== confirmPassword 
-                        ? 'border-rose-500 focus:border-rose-500' 
-                        : 'border-[#27272A] focus:border-[#FACC15]'
-                    }`}
-                  />
+                  <p className="text-[11px] text-zinc-500 mt-1.5 font-mono">
+                    Supabase Auth will verify your email and dispatch a secure 256-bit password recovery link.
+                  </p>
                 </div>
-              </div>
+
+                <div className="p-3 rounded-xl bg-[#091122] border border-[#1E305C] text-xs font-mono text-cyan-200 space-y-1">
+                  <div className="font-bold text-cyan-300 flex items-center gap-1.5">
+                    <Send className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Supabase Email Verification Flow:</span>
+                  </div>
+                  <p className="text-[11px] text-cyan-200/80">
+                    1. Click below to trigger the Supabase Auth verification email.
+                    <br />
+                    2. Check your inbox for the link with recovery token.
+                    <br />
+                    3. Clicking the link verifies your identity and prompts you to choose a new password.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-mono pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('signin')}
+                    className="text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back to Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('recovery')}
+                    className="text-[#FACC15] hover:underline cursor-pointer"
+                  >
+                    Enter New Password directly &rarr;
+                  </button>
+                </div>
+              </>
             )}
 
-            {/* Operational Suite Mode Quick-Select */}
-            <div className="pt-1">
-              <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA] mb-2">
-                Operational Suite Mode
-              </label>
-              <div className="grid grid-cols-1 gap-2">
-                {/* Track A Option */}
-                <label 
-                  className={`flex items-start gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                    selectedTrack === 'track-a'
-                      ? 'bg-[#050505] border-[#FACC15] shadow-sm shadow-[#FACC15]/10'
-                      : 'bg-[#050505]/60 border-[#27272A] hover:border-zinc-700'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="suite-track"
-                    checked={selectedTrack === 'track-a'}
-                    onChange={() => setSelectedTrack('track-a')}
-                    className="mt-1 accent-[#FACC15]"
-                  />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-[#FFFFFF]">Track A: Enterprise API Suite</span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-[#FACC15]/20 text-[#FACC15] border border-[#FACC15]/40">
-                        CRON
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#A1A1AA] mt-0.5">
-                      Automated midnight MFS cron ingestion & shadow read-replica cross-matching
-                    </p>
-                  </div>
-                </label>
+            {/* VIEW B: SET NEW PASSWORD (RECOVERY MODE) */}
+            {authMode === 'recovery' && (
+              <>
+                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-xs font-mono text-emerald-200">
+                  <span className="font-bold text-emerald-300 flex items-center gap-1 mb-1">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> Password Recovery Session
+                  </span>
+                  Choose a strong, secure password for <strong className="text-white">{email}</strong>.
+                </div>
 
-                {/* Track B Option */}
-                <label 
-                  className={`flex items-start gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                    selectedTrack === 'track-b'
+                {/* New Password */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                      New Merchant Password (min 6 chars)
+                    </label>
+                    <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Supabase Secured
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
+                      <Key className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="recovery-new-password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      placeholder="Enter new password"
+                      className="w-full pl-10 pr-10 py-2.5 bg-[#050505] border border-[#27272A] rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#FACC15] focus:ring-1 focus:ring-[#FACC15] transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm New Password */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                      Confirm New Password
+                    </label>
+                    {confirmPassword && password === confirmPassword && (
+                      <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Passwords match
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
+                      <Key className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="recovery-confirm-password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      placeholder="Confirm new password"
+                      className={`w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none transition-all ${
+                        confirmPassword && password !== confirmPassword 
+                          ? 'border-rose-500 focus:border-rose-500' 
+                          : 'border-[#27272A] focus:border-[#FACC15]'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-1 flex items-center justify-between text-xs font-mono">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('signin')}
+                    className="text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back to Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('forgot')}
+                    className="text-[#FACC15] hover:underline cursor-pointer"
+                  >
+                    Request new reset link
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* VIEW C: SIGN IN & SIGN UP FORMS */}
+            {(authMode === 'signin' || authMode === 'signup') && (
+              <>
+                {/* Field for New Account: Merchant Business / Organization Name */}
+                {authMode === 'signup' && (
+                  <div>
+                    <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA] mb-1.5">
+                      Business / Company Name
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <input
+                        id="signup-merchant-org"
+                        type="text"
+                        value={merchantName}
+                        onChange={(e) => setMerchantName(e.target.value)}
+                        required
+                        placeholder="e.g., Apex Footwear / Dhaka Retail"
+                        className="w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border border-[#27272A] rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#FACC15] focus:ring-1 focus:ring-[#FACC15] transition-all"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Field: Merchant Email */}
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA] mb-1.5">
+                    Merchant Corporate Email
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
+                      <Mail className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="auth-merchant-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      placeholder="merchant@corporate.com"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border border-[#27272A] rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#FACC15] focus:ring-1 focus:ring-[#FACC15] transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Field: Password */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                      {authMode === 'signin' ? 'Merchant Password' : 'Create Password (min 6 chars)'}
+                    </label>
+
+                    {authMode === 'signin' ? (
+                      <button
+                        id="forgot-password-trigger-btn"
+                        type="button"
+                        onClick={() => handleSwitchMode('forgot')}
+                        className="text-xs font-mono text-[#FACC15] hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <KeyRound className="w-3 h-3" />
+                        Forgot Password?
+                      </button>
+                    ) : (
+                      <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
+                        <Lock className="w-3 h-3" />
+                        Supabase Encrypted
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
+                      <Key className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="auth-merchant-password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      placeholder="••••••••••••"
+                      className="w-full pl-10 pr-10 py-2.5 bg-[#050505] border border-[#27272A] rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#FACC15] focus:ring-1 focus:ring-[#FACC15] transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Field for New Account: Confirm Password */}
+                {authMode === 'signup' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                        Confirm Password
+                      </label>
+                      {confirmPassword && password === confirmPassword && (
+                        <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Passwords match
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A1A1AA]">
+                        <Key className="w-4 h-4" />
+                      </div>
+                      <input
+                        id="signup-confirm-password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        minLength={6}
+                        placeholder="••••••••••••"
+                        className={`w-full pl-10 pr-3.5 py-2.5 bg-[#050505] border rounded-lg text-sm text-[#FFFFFF] font-mono placeholder:text-zinc-600 focus:outline-none transition-all ${
+                          confirmPassword && password !== confirmPassword 
+                            ? 'border-rose-500 focus:border-rose-500' 
+                            : 'border-[#27272A] focus:border-[#FACC15]'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Operational Suite Mode Quick-Select */}
+                <div className="pt-1">
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[#A1A1AA] mb-2">
+                    Operational Suite Mode
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
+                    {/* Track A Option */}
+                    <label 
+                      className={`flex items-start gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                        selectedTrack === 'track-a'
+                          ? 'bg-[#050505] border-[#FACC15] shadow-sm shadow-[#FACC15]/10'
+                          : 'bg-[#050505]/60 border-[#27272A] hover:border-zinc-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="suite-track"
+                        checked={selectedTrack === 'track-a'}
+                        onChange={() => setSelectedTrack('track-a')}
+                        className="mt-1 accent-[#FACC15]"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[#FFFFFF]">Track A: Enterprise API Suite</span>
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-[#FACC15]/20 text-[#FACC15] border border-[#FACC15]/40">
+                            CRON
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#A1A1AA] mt-0.5">
+                          Automated midnight MFS cron ingestion & shadow read-replica cross-matching
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Track B Option */}
+                    <label 
+                      className={`flex items-start gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                        selectedTrack === 'track-b'
                       ? 'bg-[#050505] border-[#FACC15] shadow-sm shadow-[#FACC15]/10'
                       : 'bg-[#050505]/60 border-[#27272A] hover:border-zinc-700'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="suite-track"
-                    checked={selectedTrack === 'track-b'}
-                    onChange={() => setSelectedTrack('track-b')}
-                    className="mt-1 accent-[#FACC15]"
-                  />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-[#FFFFFF]">Track B: SME & F-Commerce Portal</span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
-                        MANUAL
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#A1A1AA] mt-0.5">
-                      Passive IMAP email scraping & simultaneous dual-file (MFS + Courier) upload
-                    </p>
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="suite-track"
+                        checked={selectedTrack === 'track-b'}
+                        onChange={() => setSelectedTrack('track-b')}
+                        className="mt-1 accent-[#FACC15]"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[#FFFFFF]">Track B: SME & F-Commerce Portal</span>
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            MANUAL
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#A1A1AA] mt-0.5">
+                          Passive IMAP email scraping & simultaneous dual-file (MFS + Courier) upload
+                        </p>
+                      </div>
+                    </label>
                   </div>
-                </label>
-              </div>
-            </div>
+                </div>
+              </>
+            )}
 
             {/* Authenticating Progress Indicator */}
             {(isAuthLoading || authStep) && (
@@ -438,26 +676,52 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
               disabled={isAuthLoading}
               className="w-full py-3 px-4 rounded-xl bg-[#FACC15] hover:bg-[#EAB308] text-[#050505] font-bold text-sm tracking-wide shadow-lg shadow-[#FACC15]/20 hover:shadow-[#FACC15]/30 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer font-sans disabled:opacity-50"
             >
-              <span>{authMode === 'signin' ? 'LOGIN & ACCESS DASHBOARD' : 'REGISTER NEW ACCOUNT IN SUPABASE'}</span>
-              <ArrowRight className="w-4 h-4 text-[#050505] stroke-[2.5]" />
+              {authMode === 'signin' && (
+                <>
+                  <span>LOGIN & ACCESS DASHBOARD</span>
+                  <ArrowRight className="w-4 h-4 text-[#050505] stroke-[2.5]" />
+                </>
+              )}
+              {authMode === 'signup' && (
+                <>
+                  <span>REGISTER NEW ACCOUNT IN SUPABASE</span>
+                  <ArrowRight className="w-4 h-4 text-[#050505] stroke-[2.5]" />
+                </>
+              )}
+              {authMode === 'forgot' && (
+                <>
+                  <span>SEND SUPABASE RESET EMAIL</span>
+                  <Send className="w-4 h-4 text-[#050505] stroke-[2.5]" />
+                </>
+              )}
+              {authMode === 'recovery' && (
+                <>
+                  <span>UPDATE PASSWORD & UNLOCK WORKSPACE</span>
+                  <ArrowRight className="w-4 h-4 text-[#050505] stroke-[2.5]" />
+                </>
+              )}
             </button>
           </form>
 
-          {/* Quick Switch Link between Sign In and Create New Account */}
+          {/* Quick Switch Links */}
           <div className="mt-4 pt-3 border-t border-[#27272A] text-center">
-            {authMode === 'signin' ? (
-              <div className="text-xs text-zinc-400 font-mono">
-                Don't have a merchant account yet?{' '}
-                <button
-                  id="switch-to-signup-link"
-                  type="button"
-                  onClick={() => handleSwitchMode('signup')}
-                  className="text-[#FACC15] font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
-                >
-                  Create New Account here &rarr;
-                </button>
+            {authMode === 'signin' && (
+              <div className="flex flex-col gap-1 text-xs text-zinc-400 font-mono">
+                <div>
+                  Don't have a merchant account yet?{' '}
+                  <button
+                    id="switch-to-signup-link"
+                    type="button"
+                    onClick={() => handleSwitchMode('signup')}
+                    className="text-[#FACC15] font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+                  >
+                    Create New Account here &rarr;
+                  </button>
+                </div>
               </div>
-            ) : (
+            )}
+
+            {authMode === 'signup' && (
               <div className="text-xs text-zinc-400 font-mono">
                 Already registered with Supabase?{' '}
                 <button
@@ -467,6 +731,32 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
                   className="text-[#FACC15] font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
                 >
                   Sign In to existing account &rarr;
+                </button>
+              </div>
+            )}
+
+            {authMode === 'forgot' && (
+              <div className="text-xs text-zinc-400 font-mono">
+                Remember your password?{' '}
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMode('signin')}
+                  className="text-[#FACC15] font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+                >
+                  Return to Sign In &rarr;
+                </button>
+              </div>
+            )}
+
+            {authMode === 'recovery' && (
+              <div className="text-xs text-zinc-400 font-mono">
+                Cancel recovery?{' '}
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMode('signin')}
+                  className="text-zinc-400 hover:text-white hover:underline cursor-pointer inline-flex items-center gap-1"
+                >
+                  Back to Sign In
                 </button>
               </div>
             )}

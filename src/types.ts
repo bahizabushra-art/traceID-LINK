@@ -3,6 +3,8 @@ export type TrackMode = 'track-a' | 'track-b';
 export type ActivePage = 
   | 'login'
   | 'register'
+  | 'forgot-password'
+  | 'reset-password'
   | 'orders'
   | 'audit'
   | 'reports'
