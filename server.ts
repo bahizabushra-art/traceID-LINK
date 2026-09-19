@@ -6,6 +6,7 @@ import { generateTrackingPointer } from './server/idGenerator';
 import { evaluateAuditRecord, calculateBankSumCheck, AuditRecordInput } from './server/reconciler';
 import { ingestEmailWebhook } from './server/imapWorker';
 import { parseSettlementStatement } from './server/pdfParser';
+import { structureCsvWithGroq } from './server/groqParser';
 import { bkashSandbox, nagadSandbox, pathaoSandbox, steadfastSandbox, redxSandbox } from './server/gateways';
 
 async function startServer() {
@@ -249,7 +250,7 @@ async function startServer() {
   });
 
   // -------------------------------------------------------------
-  // 6. Direct Statement / PDF Parser (Lightweight, Render-Safe)
+  // 6. Direct Statement / PDF Parser & Groq LLM Structuring Engine
   // -------------------------------------------------------------
   app.post('/api/statements/parse', async (req, res) => {
     try {
@@ -257,6 +258,26 @@ async function startServer() {
       const parsed = await parseSettlementStatement(text || '', fileName || 'statement.pdf');
       return res.json({ success: true, ...parsed });
     } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/groq/structure-csv', async (req, res) => {
+    try {
+      const { rawCsv, fileType, fileName } = req.body;
+      if (!rawCsv || typeof rawCsv !== 'string') {
+        return res.status(400).json({ success: false, error: 'rawCsv string is required' });
+      }
+
+      const structured = await structureCsvWithGroq(
+        rawCsv,
+        fileType || 'auto',
+        fileName || 'unstructured_statement.csv'
+      );
+
+      return res.json(structured);
+    } catch (err: any) {
+      console.error('Groq structure error:', err);
       return res.status(500).json({ success: false, error: err.message });
     }
   });

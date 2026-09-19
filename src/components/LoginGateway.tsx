@@ -26,6 +26,7 @@ import {
   Scale,
   FileSpreadsheet
 } from 'lucide-react';
+import { ForgotPassword } from './ForgotPassword';
 
 interface LoginGatewayProps {
   initialMode?: 'signin' | 'signup' | 'forgot' | 'recovery';
@@ -387,7 +388,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
                     type="button"
                     onClick={() => handleSwitchMode('signin')}
                     className={`px-3 py-1.5 rounded-md font-bold transition-all cursor-pointer ${
-                      authMode === 'signin' || authMode === 'forgot'
+                      authMode === 'signin'
                         ? 'bg-amber-400 text-black shadow-sm'
                         : 'text-zinc-400 hover:text-white'
                     }`}
@@ -405,77 +406,44 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
                   >
                     New Account
                   </button>
+                  {authMode === 'forgot' && (
+                    <span className="px-3 py-1.5 rounded-md font-bold bg-amber-400 text-black shadow-sm">
+                      Reset Key
+                    </span>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Error or Feedback Alert */}
-            {(authError || formValidationWarning) && (
+            {/* Error or Feedback Alert for Non-Forgot Modes */}
+            {authMode !== 'forgot' && (authError || formValidationWarning) && (
               <div className="mb-4 p-3 rounded-xl bg-rose-950/80 border border-rose-700 text-xs text-rose-200 flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                 <div className="leading-snug">{formValidationWarning || authError}</div>
               </div>
             )}
 
-            {infoMessage && (
+            {authMode !== 'forgot' && infoMessage && (
               <div className="mb-4 p-3 rounded-xl bg-emerald-950/80 border border-emerald-700 text-xs text-emerald-200 flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="leading-snug">{infoMessage}</div>
               </div>
             )}
 
-            {/* Forms Container */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* VIEW: FORGOT PASSWORD */}
-              {authMode === 'forgot' && (
-                <>
-                  <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono">
-                    <span className="font-bold text-amber-400 flex items-center gap-1.5 mb-1">
-                      <KeyRound className="w-3.5 h-3.5" /> Reset Password via Supabase Auth
-                    </span>
-                    Enter your registered merchant email. We will send a secure password reset link to your inbox.
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-mono uppercase tracking-wider text-zinc-400 mb-1.5">
-                      Merchant Corporate Email
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
-                        <Mail className="w-4 h-4" />
-                      </div>
-                      <input
-                        id="forgot-email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        placeholder="merchant@corporate.com"
-                        className="w-full pl-10 pr-3.5 py-2.5 bg-black border border-zinc-800 rounded-lg text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs font-mono pt-1">
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchMode('signin')}
-                      className="text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" /> Back to Sign In
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchMode('recovery')}
-                      className="text-amber-400 hover:underline cursor-pointer"
-                    >
-                      Enter Recovery Token directly &rarr;
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {/* VIEW: RECOVERY (ENTER NEW PASSWORD) */}
+            {/* Dedicated High-Contrast Forgot Password UI Component */}
+            {authMode === 'forgot' ? (
+              <div className="mt-1">
+                <ForgotPassword
+                  compact
+                  initialEmail={email || 'bahizabushra@gmail.com'}
+                  onBackToSignIn={() => handleSwitchMode('signin')}
+                  onNavigateToRecovery={() => handleSwitchMode('recovery')}
+                />
+              </div>
+            ) : (
+              /* Forms Container for Sign In, Sign Up, and Direct Password Recovery */
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* VIEW: RECOVERY (ENTER NEW PASSWORD) */}
               {authMode === 'recovery' && (
                 <>
                   <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800 text-xs font-mono text-emerald-200">
@@ -710,12 +678,6 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
                     <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                   </>
                 )}
-                {authMode === 'forgot' && (
-                  <>
-                    <span>SEND SUPABASE RESET EMAIL</span>
-                    <Send className="w-4 h-4 stroke-[2.5]" />
-                  </>
-                )}
                 {authMode === 'recovery' && (
                   <>
                     <span>UPDATE PASSWORD &amp; ENTER WORKSPACE</span>
@@ -724,30 +686,33 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
                 )}
               </button>
             </form>
+            )}
 
             {/* Quick Demo Fill Pills for Testing Authentic Login */}
-            <div className="mt-4 pt-3 border-t border-zinc-800/80 text-xs font-mono text-zinc-400">
-              <div className="flex items-center justify-between">
-                <span>Quick Fill Authentic Credentials:</span>
-                <span className="text-[10px] text-zinc-500">Supabase DB</span>
+            {authMode !== 'forgot' && (
+              <div className="mt-4 pt-3 border-t border-zinc-800/80 text-xs font-mono text-zinc-400">
+                <div className="flex items-center justify-between">
+                  <span>Quick Fill Authentic Credentials:</span>
+                  <span className="text-[10px] text-zinc-500">Supabase DB</span>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickFill('bahizabushra@gmail.com', 'SecureMerchant@2026', 'track-a', 'Daraz Enterprise Hub')}
+                    className="px-2.5 py-1 rounded bg-black hover:bg-zinc-900 border border-zinc-800 text-amber-400 text-[11px] font-bold cursor-pointer transition-colors"
+                  >
+                    Enterprise Account (Daraz)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickFill('sme.finance@merchant.bd', 'DhakaFintech@2026', 'track-b', 'Dhaka SME Store')}
+                    className="px-2.5 py-1 rounded bg-black hover:bg-zinc-900 border border-zinc-800 text-cyan-400 text-[11px] font-bold cursor-pointer transition-colors"
+                  >
+                    SME Account (File Upload)
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('bahizabushra@gmail.com', 'SecureMerchant@2026', 'track-a', 'Daraz Enterprise Hub')}
-                  className="px-2.5 py-1 rounded bg-black hover:bg-zinc-900 border border-zinc-800 text-amber-400 text-[11px] font-bold cursor-pointer transition-colors"
-                >
-                  Enterprise Account (Daraz)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('sme.finance@merchant.bd', 'DhakaFintech@2026', 'track-b', 'Dhaka SME Store')}
-                  className="px-2.5 py-1 rounded bg-black hover:bg-zinc-900 border border-zinc-800 text-cyan-400 text-[11px] font-bold cursor-pointer transition-colors"
-                >
-                  SME Account (File Upload)
-                </button>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Authentic Footer */}

@@ -106,6 +106,7 @@ interface ReconContextType {
   setTrackBBankFileName: (name: string) => void;
   uploadTrackBBankFile: (name: string) => void;
   removeTrackBBankFile: () => void;
+  clearTrackBFiles: () => void;
   isTrackBAuditRunning: boolean;
   trackBAuditExecuted: boolean;
   runTrackBDualAudit: () => void;
@@ -271,15 +272,15 @@ export const ReconProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [dispatchedParcels, setDispatchedParcels] = useState<DispatchedParcel[]>(INITIAL_DISPATCHED_PARCELS);
   const [activeLabelModalParcel, setActiveLabelModalParcel] = useState<DispatchedParcel | null>(null);
   
-  // Track B Simultaneous Reconcile (Courier, MFS, and Optional Bank File)
-  const [trackBMfsUploaded, setTrackBMfsUploaded] = useState<boolean>(true);
-  const [trackBMfsFileName, setTrackBMfsFileName] = useState<string>('bKash_Merchant_Statement_Sept08.csv');
-  const [trackBCourierUploaded, setTrackBCourierUploaded] = useState<boolean>(true);
-  const [trackBCourierFileName, setTrackBCourierFileName] = useState<string>('Steadfast_Courier_Remit_Sept08.csv');
+  // Track B Simultaneous Reconcile (Starts clean for app production mode)
+  const [trackBMfsUploaded, setTrackBMfsUploaded] = useState<boolean>(false);
+  const [trackBMfsFileName, setTrackBMfsFileName] = useState<string>('');
+  const [trackBCourierUploaded, setTrackBCourierUploaded] = useState<boolean>(false);
+  const [trackBCourierFileName, setTrackBCourierFileName] = useState<string>('');
   const [trackBBankUploaded, setTrackBBankUploaded] = useState<boolean>(false);
   const [trackBBankFileName, setTrackBBankFileName] = useState<string>('');
   const [isTrackBAuditRunning, setIsTrackBAuditRunning] = useState<boolean>(false);
-  const [trackBAuditExecuted, setTrackBAuditExecuted] = useState<boolean>(true);
+  const [trackBAuditExecuted, setTrackBAuditExecuted] = useState<boolean>(false);
 
   const uploadTrackBMfsFile = useCallback((name: string) => {
     setTrackBMfsFileName(name);
@@ -299,6 +300,16 @@ export const ReconProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const removeTrackBBankFile = useCallback(() => {
     setTrackBBankFileName('');
     setTrackBBankUploaded(false);
+  }, []);
+
+  const clearTrackBFiles = useCallback(() => {
+    setTrackBMfsFileName('');
+    setTrackBMfsUploaded(false);
+    setTrackBCourierFileName('');
+    setTrackBCourierUploaded(false);
+    setTrackBBankFileName('');
+    setTrackBBankUploaded(false);
+    setTrackBAuditExecuted(false);
   }, []);
 
   // Return Policy & Parcels Across Both Track A and Track B
@@ -1357,6 +1368,7 @@ export const ReconProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setTrackBBankFileName,
         uploadTrackBBankFile,
         removeTrackBBankFile,
+        clearTrackBFiles,
         isTrackBAuditRunning,
         trackBAuditExecuted,
         runTrackBDualAudit,

@@ -20,7 +20,10 @@ import {
   RefreshCcw,
   Check,
   Zap,
-  CheckCheck
+  CheckCheck,
+  Sparkles,
+  Layers,
+  Trash2
 } from 'lucide-react';
 import { 
   parseAndReconcileUserFiles, 
@@ -42,12 +45,11 @@ export const DualFileReconcile: React.FC = () => {
     trackBBankFileName,
     uploadTrackBBankFile,
     removeTrackBBankFile,
+    clearTrackBFiles,
     isTrackBAuditRunning,
     trackBAuditExecuted,
     runTrackBDualAudit,
-    setActivePage,
-    auditRecords,
-    returnParcels
+    setActivePage
   } = useRecon();
 
   const [dragMfs, setDragMfs] = useState<boolean>(false);
@@ -55,39 +57,96 @@ export const DualFileReconcile: React.FC = () => {
   const [dragBank, setDragBank] = useState<boolean>(false);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
 
-  // User uploaded custom file contents
+  // Groq LLM Processing & Telemetry State
+  const [isGroqProcessing, setIsGroqProcessing] = useState<boolean>(false);
+  const [groqStatusMsg, setGroqStatusMsg] = useState<string>('');
+  const [groqTelemetry, setGroqTelemetry] = useState<{
+    engine: string;
+    model: string;
+    detectedFormats?: { mfs?: string; courier?: string };
+  } | null>(null);
+
+  // User uploaded custom file contents & structured results
   const [customMfsContent, setCustomMfsContent] = useState<string | null>(null);
   const [customCourierContent, setCustomCourierContent] = useState<string | null>(null);
   const [userParsedResult, setUserParsedResult] = useState<ParsedCsvResult | null>(null);
 
-  // Function to read and ingest custom user files
-  const processUploadedFile = (file: File, type: 'mfs' | 'courier' | 'bank') => {
+  // Ingests custom user CSV/TXT files and triggers Groq structuring
+  const processUploadedFile = async (file: File, type: 'mfs' | 'courier' | 'bank') => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = (e.target?.result as string) || '';
-      if (type === 'mfs') {
-        setCustomMfsContent(text);
-        uploadTrackBMfsFile(file.name);
-        setUploadFeedback(`Ingested custom MFS statement: ${file.name} (${file.size} bytes)`);
-
-        // If courier is also provided, run parse engine
-        const courierText = customCourierContent || SAMPLE_COURIER_CSV;
-        const res = parseAndReconcileUserFiles(text, courierText, file.name, trackBCourierFileName || 'Steadfast_Remittance_Sample.csv');
-        setUserParsedResult(res);
-      } else if (type === 'courier') {
-        setCustomCourierContent(text);
-        uploadTrackBCourierFile(file.name);
-        setUploadFeedback(`Ingested custom Courier statement: ${file.name} (${file.size} bytes)`);
-
-        // If MFS is also provided, run parse engine
-        const mfsText = customMfsContent || SAMPLE_MFS_CSV;
-        const res = parseAndReconcileUserFiles(mfsText, text, trackBMfsFileName || 'bKash_Merchant_Sample.csv', file.name);
-        setUserParsedResult(res);
-      } else if (type === 'bank') {
+      
+      if (type === 'bank') {
         uploadTrackBBankFile(file.name);
         setUploadFeedback(`Attached Bank Statement for 3-way check: ${file.name}`);
+        setTimeout(() => setUploadFeedback(null), 4000);
+        return;
       }
-      setTimeout(() => setUploadFeedback(null), 4000);
+
+      setIsGroqProcessing(true);
+      setGroqStatusMsg(`Groq LLaMA-3.3 70B is analyzing raw columns in ${file.name}...`);
+
+      try {
+        if (type === 'mfs') {
+          setCustomMfsContent(text);
+          uploadTrackBMfsFile(file.name);
+          setUploadFeedback(`Ingested MFS statement: ${file.name} (${file.size} bytes)`);
+
+          const courierText = customCourierContent || '';
+          if (courierText) {
+            setGroqStatusMsg('Groq LLM cross-structuring MFS & Courier statements...');
+            const res = await parseAndReconcileUserFiles(text, courierText, file.name, trackBCourierFileName || 'courier_statement.csv');
+            setUserParsedResult(res);
+            setGroqTelemetry({
+              engine: res.engineUsed || 'Groq LLaMA-3.3 70B AI Engine',
+              model: 'llama-3.3-70b-versatile',
+              detectedFormats: res.detectedFormats
+            });
+          } else {
+            // Single-file preview until courier is dropped
+            const res = await parseAndReconcileUserFiles(text, '', file.name, 'Awaiting Courier Statement');
+            setUserParsedResult(res);
+            setGroqTelemetry({
+              engine: res.engineUsed || 'Groq LLaMA-3.3 70B AI Engine',
+              model: 'llama-3.3-70b-versatile',
+              detectedFormats: res.detectedFormats
+            });
+          }
+        } else if (type === 'courier') {
+          setCustomCourierContent(text);
+          uploadTrackBCourierFile(file.name);
+          setUploadFeedback(`Ingested Courier statement: ${file.name} (${file.size} bytes)`);
+
+          const mfsText = customMfsContent || '';
+          if (mfsText) {
+            setGroqStatusMsg('Groq LLM cross-structuring MFS & Courier statements...');
+            const res = await parseAndReconcileUserFiles(mfsText, text, trackBMfsFileName || 'mfs_statement.csv', file.name);
+            setUserParsedResult(res);
+            setGroqTelemetry({
+              engine: res.engineUsed || 'Groq LLaMA-3.3 70B AI Engine',
+              model: 'llama-3.3-70b-versatile',
+              detectedFormats: res.detectedFormats
+            });
+          } else {
+            // Single-file preview until MFS is dropped
+            const res = await parseAndReconcileUserFiles('', text, 'Awaiting MFS Statement', file.name);
+            setUserParsedResult(res);
+            setGroqTelemetry({
+              engine: res.engineUsed || 'Groq LLaMA-3.3 70B AI Engine',
+              model: 'llama-3.3-70b-versatile',
+              detectedFormats: res.detectedFormats
+            });
+          }
+        }
+      } catch (err: any) {
+        console.error('File parsing error:', err);
+        setUploadFeedback(`Structuring error: ${err.message}`);
+      } finally {
+        setIsGroqProcessing(false);
+        setGroqStatusMsg('');
+        setTimeout(() => setUploadFeedback(null), 4000);
+      }
     };
     reader.readAsText(file);
   };
@@ -116,200 +175,61 @@ export const DualFileReconcile: React.FC = () => {
     }
   };
 
-  // Revert custom upload back to the default benchmark sample
-  const handleResetToStandardSample = () => {
+  // Loads benchmark messy CSV statements with Groq LLM for demonstration
+  const handleLoadBenchmarkSample = async () => {
+    setIsGroqProcessing(true);
+    setGroqStatusMsg('Groq LLaMA-3.3 70B is analyzing and structuring benchmark statements...');
+    
+    uploadTrackBMfsFile('bKash_Merchant_Benchmark_Sept08.csv');
+    uploadTrackBCourierFile('Steadfast_Remit_Benchmark_Sept08.csv');
+    setCustomMfsContent(SAMPLE_MFS_CSV);
+    setCustomCourierContent(SAMPLE_COURIER_CSV);
+
+    try {
+      const res = await parseAndReconcileUserFiles(
+        SAMPLE_MFS_CSV,
+        SAMPLE_COURIER_CSV,
+        'bKash_Merchant_Sept08.csv',
+        'Steadfast_Remit_Sept08.csv'
+      );
+      setUserParsedResult(res);
+      setGroqTelemetry({
+        engine: res.engineUsed || 'Groq LLaMA-3.3 70B AI Engine',
+        model: 'llama-3.3-70b-versatile',
+        detectedFormats: res.detectedFormats
+      });
+      setUploadFeedback('Structured benchmark statements via Groq LLM');
+    } catch (err: any) {
+      console.error('Benchmark load error:', err);
+    } finally {
+      setIsGroqProcessing(false);
+      setGroqStatusMsg('');
+      setTimeout(() => setUploadFeedback(null), 3500);
+    }
+  };
+
+  // Resets to clean workspace with empty data
+  const handleClearAllFiles = () => {
     setCustomMfsContent(null);
     setCustomCourierContent(null);
     setUserParsedResult(null);
-    uploadTrackBMfsFile('bKash_Merchant_Sept08.csv');
-    uploadTrackBCourierFile('Steadfast_Remit_Sept08.csv');
-    setUploadFeedback('Reset to standard Dhaka Merchant benchmark dataset');
+    setGroqTelemetry(null);
+    clearTrackBFiles();
+    setUploadFeedback('Cleared uploaded statements. Workspace is ready for your files.');
     setTimeout(() => setUploadFeedback(null), 3000);
   };
 
-  // Convert Track B records into the exact 11-column UnifiedAuditRow structure
+  // The output rows to display in the audit table:
+  // In production app mode, this is strictly derived from the files dropped by the user!
   const unifiedTrackBRows: UnifiedAuditRow[] = useMemo(() => {
-    // If the user uploaded their own CSV statements, use the parsed mathematical rows!
     if (userParsedResult && userParsedResult.rows.length > 0) {
       return userParsedResult.rows;
     }
+    // Clean production state: empty until user drops files or loads benchmark demo
+    return [];
+  }, [userParsedResult]);
 
-    const isRet203Scanned = 
-      Boolean(auditRecords.find(r => r.traceId === 'TR-RET-203')?.resolved) ||
-      Boolean(returnParcels.find(p => p.traceId === 'TR-RET-203')?.scannedAtWarehouse);
-
-    return [
-      // 1. Table 1: Pre-Payment (100% MFS)
-      {
-        id: 'sme-row-01',
-        traceId: 'TR-SME-2026-P01',
-        orderId: 'FB-ORD-5501',
-        trxId: 'CK44PP190X',
-        rowCategoryKey: 'T1_PREPAID',
-        rowCategoryName: 'Table 1: Pre-Payment (100% MFS)',
-        customerName: 'Amina Chowdhury',
-        customerPhone: '01711892019',
-        channelPartner: 'bKash + Pathao Courier',
-        grossOrderBDT: 3200,
-        mfsCreditBDT: 3200,
-        courierCodBDT: 0,
-        deliveryFeeBDT: 80,
-        netBankSettledBDT: 3120,
-        varianceGapBDT: 0,
-        status: 'MATCHED',
-        statusLabel: 'MATCHED',
-        statusBadgeClasses: 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40',
-        tooltip: '100% Verified: Advance payment verified on bKash merchant statement. Pathao delivery fee of BDT 80 accounted for; net BDT 3,120 credited to bank.',
-        notes: 'FB Order messenger booking token matched with bKash TrxID CK44PP190X. Net payout settled in City Bank.'
-      },
-      // 2. Table 3: Split Payment (Advance + COD)
-      {
-        id: 'sme-row-02',
-        traceId: 'TR-SME-2026-P02',
-        orderId: 'FB-ORD-5502',
-        trxId: 'DA88LL2091',
-        rowCategoryKey: 'T3_SPLIT',
-        rowCategoryName: 'Table 3: Split Payment (Advance + COD)',
-        customerName: 'Tanvir Hossain',
-        customerPhone: '01822490182',
-        channelPartner: 'bKash Advance + Steadfast COD',
-        grossOrderBDT: 2600,
-        mfsCreditBDT: 150,
-        courierCodBDT: 2450,
-        deliveryFeeBDT: 100,
-        netBankSettledBDT: 2500,
-        varianceGapBDT: 0,
-        status: 'MATCHED',
-        statusLabel: 'MATCHED',
-        statusBadgeClasses: 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40',
-        tooltip: 'Twin-pulse reconciliation verified: BDT 150 delivery charge paid via bKash advance; BDT 2,450 remaining collected via Steadfast COD. Steadfast fee BDT 100 accounted for.',
-        notes: 'Both legs cross-matched. Customer paid partial advance to confirm order.'
-      },
-      // 3. Table 2: 100% COD
-      {
-        id: 'sme-row-03',
-        traceId: 'TR-SME-2026-P03',
-        orderId: 'FB-ORD-5503',
-        trxId: 'COD-ST-99120',
-        rowCategoryKey: 'T2_COD',
-        rowCategoryName: 'Table 2: 100% Cash On Delivery',
-        customerName: 'Farhana Yasmin',
-        customerPhone: '01933581029',
-        channelPartner: 'Steadfast Courier',
-        grossOrderBDT: 1850,
-        mfsCreditBDT: 0,
-        courierCodBDT: 1850,
-        deliveryFeeBDT: 100,
-        netBankSettledBDT: 1750,
-        varianceGapBDT: 0,
-        status: 'MATCHED',
-        statusLabel: 'MATCHED',
-        statusBadgeClasses: 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40',
-        tooltip: 'Full COD remittance cleared. Customer paid BDT 1,850 in cash; Steadfast remitted net BDT 1,750 after deducting BDT 100 delivery charge.',
-        notes: 'Standard 100% COD delivery in Chittagong region.'
-      },
-      // 4. Discrepancy 1: Under-remitted COD
-      {
-        id: 'sme-row-04',
-        traceId: 'TR-SME-2026-P04',
-        orderId: 'FB-ORD-5504',
-        trxId: 'COD-PT-44810',
-        rowCategoryKey: 'T2_COD',
-        rowCategoryName: 'Table 2: 100% Cash On Delivery',
-        customerName: 'Arif Chowdhury',
-        customerPhone: '01677291044',
-        channelPartner: 'Pathao Courier',
-        grossOrderBDT: 2400,
-        mfsCreditBDT: 0,
-        courierCodBDT: 2300,
-        deliveryFeeBDT: 120,
-        netBankSettledBDT: 2180,
-        varianceGapBDT: -100,
-        status: 'UNDER_REMITTED',
-        statusLabel: 'UNDER-REMITTED (-BDT 100)',
-        statusBadgeClasses: 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/40 font-bold',
-        tooltip: 'Discrepancy: Customer receipt shows BDT 2,400 collected; Pathao remittance report indicates only BDT 2,300 collected. Net gap of BDT 100 flagged.',
-        notes: 'Delivery agent remittance discrepancy. Clawback ticket #PT-CLAW-901 generated.'
-      },
-      // 5. Discrepancy 2: Overcharge Delivery Fee
-      {
-        id: 'sme-row-05',
-        traceId: 'TR-SME-2026-P05',
-        orderId: 'FB-ORD-5505',
-        trxId: 'COD-ST-88219',
-        rowCategoryKey: 'T2_COD',
-        rowCategoryName: 'Table 2: 100% Cash On Delivery',
-        customerName: 'Shahadat Hossain',
-        customerPhone: '01555201948',
-        channelPartner: 'Steadfast Courier',
-        grossOrderBDT: 1400,
-        mfsCreditBDT: 0,
-        courierCodBDT: 1400,
-        deliveryFeeBDT: 130,
-        netBankSettledBDT: 1270,
-        varianceGapBDT: -30,
-        status: 'UNDER_REMITTED',
-        statusLabel: 'OVERCHARGE (-BDT 30)',
-        statusBadgeClasses: 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/40 font-bold',
-        tooltip: 'Overcharge: Standard inside-Dhaka parcel SLA contract rate is BDT 100, but Steadfast deducted BDT 130 freight fee. Excess BDT 30 deduction caught.',
-        notes: 'Courier billed remote zone rate for central Dhanmondi address. Overcharge dispute filed.'
-      },
-      // 6. Return Parcel Scanned vs Unscanned
-      {
-        id: 'sme-row-06',
-        traceId: 'TR-RET-203',
-        orderId: 'FB-ORD-5507',
-        trxId: 'RET-ST-203',
-        rowCategoryKey: 'RETURN_SCANNED',
-        rowCategoryName: 'Return Parcel: Delivery Failed',
-        customerName: 'Nusrat Jahan',
-        customerPhone: '01711902847',
-        channelPartner: 'Steadfast Courier',
-        grossOrderBDT: 2100,
-        mfsCreditBDT: 0,
-        courierCodBDT: 0,
-        deliveryFeeBDT: 50,
-        netBankSettledBDT: isRet203Scanned ? -50 : -50,
-        varianceGapBDT: isRet203Scanned ? 0 : -2100,
-        status: isRet203Scanned ? 'RETURN_RECONCILED' : 'RETURN_DEFICIT',
-        statusLabel: isRet203Scanned ? 'RETURN INVENTORY VERIFIED' : 'GHOST RETURN (-BDT 2,100)',
-        statusBadgeClasses: isRet203Scanned 
-          ? 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40 font-bold'
-          : 'bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/40 font-black animate-pulse',
-        tooltip: isRet203Scanned
-          ? 'Physical parcel barcode verified at Dhaka warehouse scanner. Return return freight fee BDT 50 accounted for.'
-          : 'ALARM: Steadfast marked order as "Returned to Merchant", but parcel barcode has NOT been scanned in merchant warehouse. Inventory deficit of BDT 2,100 flagged.',
-        notes: isRet203Scanned
-          ? 'Barcode scanned by operator. Inventory restocked.'
-          : 'Ghost return audit protocol triggered. Courier SLA claim in progress.'
-      },
-      // 7. Table 1: Nagad Advance Payment
-      {
-        id: 'sme-row-07',
-        traceId: 'TR-SME-2026-P06',
-        orderId: 'FB-ORD-5506',
-        trxId: 'NG-9K72MM091',
-        rowCategoryKey: 'T1_PREPAID',
-        rowCategoryName: 'Table 1: Pre-Payment (100% Nagad)',
-        customerName: 'Mehedi Hasan',
-        customerPhone: '01799281039',
-        channelPartner: 'Nagad + RedX Courier',
-        grossOrderBDT: 2450,
-        mfsCreditBDT: 2450,
-        courierCodBDT: 0,
-        deliveryFeeBDT: 80,
-        netBankSettledBDT: 2370,
-        varianceGapBDT: 0,
-        status: 'MATCHED',
-        statusLabel: 'MATCHED',
-        statusBadgeClasses: 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/40',
-        tooltip: '100% Verified: Full advance Nagad payment mapped to FB-ORD-5506. RedX delivery fee BDT 80 accounted for; net BDT 2,370 cleared in bank.',
-        notes: 'Facebook messenger conversation order ref matched Nagad TrxID NG-9K72MM091. RedX parcel consignment RDX-90182 verified.'
-      }
-    ];
-  }, [auditRecords, returnParcels, userParsedResult]);
-
-  // Totals calculations
+  // Totals calculations based strictly on current rows
   const totalExpected = unifiedTrackBRows.reduce((acc, r) => acc + r.grossOrderBDT, 0);
   const totalSettled = unifiedTrackBRows.reduce((acc, r) => acc + (typeof r.netBankSettledBDT === 'number' ? r.netBankSettledBDT : 0), 0);
   const totalVariance = Math.abs(unifiedTrackBRows.reduce((acc, r) => acc + r.varianceGapBDT, 0));
@@ -349,9 +269,35 @@ export const DualFileReconcile: React.FC = () => {
         </div>
       )}
 
-      {/* Top Banner & Operating Logic */}
+      {/* Groq LLM Structuring Active Loader Modal */}
+      {isGroqProcessing && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#121212] border-2 border-[#F59E0B] rounded-2xl max-w-md w-full p-6 font-mono text-xs shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#050505] border border-[#F59E0B] text-[#F59E0B] flex items-center justify-center mx-auto shadow-lg shadow-[#F59E0B]/20">
+              <Zap className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-white uppercase tracking-wider flex items-center justify-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#F59E0B]" />
+                <span>Groq LLaMA-3.3 70B Inference</span>
+              </div>
+              <p className="text-xs text-[#A1A1AA] mt-1.5 leading-relaxed">
+                {groqStatusMsg || 'Analyzing messy CSV statements, matching headers, and normalizing columns...'}
+              </p>
+            </div>
+            <div className="w-full bg-[#050505] h-2 rounded-full overflow-hidden border border-[#27272A]">
+              <div className="bg-gradient-to-r from-[#F59E0B] via-[#EAB308] to-[#22C55E] h-full w-full animate-[pulse_0.8s_infinite]"></div>
+            </div>
+            <div className="text-[10px] text-[#A1A1AA]">
+              Hardware accelerated via Groq LPU™ · Ultra-low latency parsing
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Banner & Groq LLM Control Engine */}
       <div className="bg-[#121212] border border-[#27272A] rounded-2xl p-5 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#050505] border border-[#FACC15] flex items-center justify-center text-[#FACC15] shrink-0">
               <GitCompare className="w-5 h-5" />
@@ -362,7 +308,7 @@ export const DualFileReconcile: React.FC = () => {
                   Category B: Track B SME
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#050505] text-[#FACC15] border border-[#FACC15]/40 font-bold">
-                  Dual-File Ingestion Portal
+                  Production App Ingestion
                 </span>
               </div>
               <h2 className="text-lg sm:text-xl font-black text-[#FFFFFF] font-mono tracking-tight mt-0.5">
@@ -371,26 +317,62 @@ export const DualFileReconcile: React.FC = () => {
             </div>
           </div>
 
-          {/* Download Sample CSV Templates */}
-          <div className="flex items-center gap-2">
+          {/* Groq LLM Badge & Quick Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="px-3 py-1.5 rounded-lg bg-[#050505] border border-[#F59E0B]/50 text-[#F59E0B] text-xs font-mono font-bold flex items-center gap-1.5 shadow-xs">
+              <Zap className="w-3.5 h-3.5 text-[#F59E0B]" />
+              <span>Groq LLaMA-3.3 70B Engine Ready</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLoadBenchmarkSample}
+              className="px-3 py-1.5 rounded-lg bg-[#050505] hover:bg-zinc-800 border border-[#27272A] text-[#FACC15] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+              title="Test with messy sample statements structured by Groq"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Test with Demo Statements</span>
+            </button>
+
+            {unifiedTrackBRows.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearAllFiles}
+                className="px-3 py-1.5 rounded-lg bg-[#050505] hover:bg-red-950/40 border border-red-900/50 text-red-400 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                title="Clear all statements and reset table"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear Files</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => downloadCsvFile('bKash_Merchant_Statement_Sample.csv', SAMPLE_MFS_CSV)}
-              className="px-3 py-1.5 rounded-lg bg-[#050505] hover:bg-zinc-800 border border-[#27272A] text-[#FACC15] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-[#050505] hover:bg-zinc-800 border border-[#27272A] text-[#A1A1AA] hover:text-[#FFFFFF] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
               title="Download sample bKash statement CSV"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Sample MFS CSV</span>
+              <span>Sample MFS</span>
             </button>
             <button
               type="button"
               onClick={() => downloadCsvFile('Steadfast_Remittance_Invoice_Sample.csv', SAMPLE_COURIER_CSV)}
-              className="px-3 py-1.5 rounded-lg bg-[#050505] hover:bg-zinc-800 border border-[#27272A] text-[#06B6D4] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-[#050505] hover:bg-zinc-800 border border-[#27272A] text-[#A1A1AA] hover:text-[#FFFFFF] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
               title="Download sample Steadfast courier remittance CSV"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Sample Courier CSV</span>
+              <span>Sample Courier</span>
             </button>
+          </div>
+        </div>
+
+        {/* Explanatory Context for Messy CSVs */}
+        <div className="mt-4 p-3 rounded-xl bg-[#050505] border border-[#27272A] text-xs font-mono text-[#A1A1AA] flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-[#FACC15] shrink-0 mt-0.5" />
+          <div>
+            <strong className="text-white">LLM-Powered Messy CSV Structuring:</strong> Drop raw statements directly from bKash, Nagad, Pathao, Steadfast, or RedX.
+            The embedded <span className="text-[#FACC15] font-bold">Groq LLaMA-3.3 70B</span> model strips report headers/preambles, resolves messy column naming (e.g. &apos;Trx ID&apos; vs &apos;Transaction ID&apos;), cleans unquoted currency formatting, and standardizes records into the output table below.
           </div>
         </div>
 
@@ -400,7 +382,12 @@ export const DualFileReconcile: React.FC = () => {
             <div className="flex items-center gap-2">
               <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
               <div>
-                <strong className="text-white">Custom Files Parsed &amp; Reconciled:</strong> {userParsedResult.fileName} ({userParsedResult.rowCount} rows processed)
+                <strong className="text-white">Structured &amp; Reconciled:</strong> {userParsedResult.fileName} ({userParsedResult.rowCount} rows processed)
+                {groqTelemetry && (
+                  <span className="ml-2 text-[11px] px-2 py-0.5 rounded bg-black/60 border border-emerald-500/40 text-[#FACC15]">
+                    Engine: {groqTelemetry.engine}
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -409,11 +396,11 @@ export const DualFileReconcile: React.FC = () => {
               </span>
               <button
                 type="button"
-                onClick={handleResetToStandardSample}
-                className="px-2.5 py-1 rounded bg-black hover:bg-zinc-900 border border-emerald-500/40 text-white hover:text-emerald-300 transition-colors flex items-center gap-1 text-[11px]"
+                onClick={handleClearAllFiles}
+                className="px-2.5 py-1 rounded bg-black hover:bg-zinc-900 border border-emerald-500/40 text-white hover:text-emerald-300 transition-colors flex items-center gap-1 text-[11px] cursor-pointer"
               >
                 <RefreshCcw className="w-3 h-3" />
-                <span>Reset Demo</span>
+                <span>Reset</span>
               </button>
             </div>
           </div>
@@ -442,46 +429,23 @@ export const DualFileReconcile: React.FC = () => {
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
                 trackBMfsUploaded ? 'bg-[#FACC15]/15 text-[#FACC15] border border-[#FACC15]/40' : 'bg-[#121212] text-[#A1A1AA]'
               }`}>
-                {trackBMfsUploaded ? '✅ Uploaded' : 'Required'}
+                {trackBMfsUploaded ? '✅ Dropped' : 'Awaiting File'}
               </span>
             </div>
 
             <div className="mt-2 text-center">
               <UploadCloud className="w-6 h-6 text-[#FACC15] mx-auto" />
-              <div className="text-xs font-bold text-[#FFFFFF] font-mono mt-1 truncate" title={trackBMfsFileName}>
-                {trackBMfsFileName}
+              <div className="text-xs font-bold text-[#FFFFFF] font-mono mt-1 truncate" title={trackBMfsFileName || 'Drop MFS Statement'}>
+                {trackBMfsFileName || 'Drop bKash / Nagad Statement'}
               </div>
               <p className="text-[10px] text-[#A1A1AA] font-mono mt-0.5">
-                bKash / Nagad MFS Statement CSV
+                {trackBMfsUploaded ? 'File parsed via Groq LLM' : 'Drop CSV or click to browse'}
               </p>
             </div>
 
             <div className="mt-2.5 pt-2 border-t border-[#27272A] flex items-center justify-between text-[10px] font-mono">
-              <span className="text-[#A1A1AA]">Samples:</span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    uploadTrackBMfsFile('bKash_Merchant_Sept08.csv');
-                    setUploadFeedback('Loaded bKash merchant statement sample');
-                    setTimeout(() => setUploadFeedback(null), 3000);
-                  }}
-                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#FACC15] border border-[#27272A] transition-colors text-[9px] font-bold cursor-pointer"
-                >
-                  bKash
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    uploadTrackBMfsFile('Nagad_Merchant_Sept08.csv');
-                    setUploadFeedback('Loaded Nagad merchant statement sample');
-                    setTimeout(() => setUploadFeedback(null), 3000);
-                  }}
-                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#FACC15] border border-[#27272A] transition-colors text-[9px] font-bold cursor-pointer"
-                >
-                  Nagad
-                </button>
-              </div>
+              <span className="text-[#A1A1AA]">Supported:</span>
+              <span className="text-[#FACC15]">bKash, Nagad, Upay, Rocket</span>
             </div>
 
             <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop your actual MFS statement CSV">
@@ -518,46 +482,23 @@ export const DualFileReconcile: React.FC = () => {
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
                 trackBCourierUploaded ? 'bg-[#06B6D4]/15 text-[#06B6D4] border border-[#06B6D4]/40' : 'bg-[#121212] text-[#A1A1AA]'
               }`}>
-                {trackBCourierUploaded ? '✅ Uploaded' : 'Required'}
+                {trackBCourierUploaded ? '✅ Dropped' : 'Awaiting File'}
               </span>
             </div>
 
             <div className="mt-2 text-center">
-              <UploadCloud className="w-6 h-6 text-[#06B6D4] mx-auto" />
-              <div className="text-xs font-bold text-[#FFFFFF] font-mono mt-1 truncate" title={trackBCourierFileName}>
-                {trackBCourierFileName}
+              <FileSpreadsheet className="w-6 h-6 text-[#06B6D4] mx-auto" />
+              <div className="text-xs font-bold text-[#FFFFFF] font-mono mt-1 truncate" title={trackBCourierFileName || 'Drop Courier Remittance'}>
+                {trackBCourierFileName || 'Drop Courier Remittance CSV'}
               </div>
               <p className="text-[10px] text-[#A1A1AA] font-mono mt-0.5">
-                3PL Courier Remittance CSV
+                {trackBCourierUploaded ? 'File parsed via Groq LLM' : 'Drop CSV or click to browse'}
               </p>
             </div>
 
             <div className="mt-2.5 pt-2 border-t border-[#27272A] flex items-center justify-between text-[10px] font-mono">
-              <span className="text-[#A1A1AA]">Samples:</span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    uploadTrackBCourierFile('Steadfast_Remit_Sept08.csv');
-                    setUploadFeedback('Loaded Steadfast Remittance sample');
-                    setTimeout(() => setUploadFeedback(null), 3000);
-                  }}
-                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#06B6D4] border border-[#27272A] transition-colors text-[9px] font-bold cursor-pointer"
-                >
-                  Steadfast
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    uploadTrackBCourierFile('Pathao_Settlement_Sept08.csv');
-                    setUploadFeedback('Loaded Pathao Settlement sample');
-                    setTimeout(() => setUploadFeedback(null), 3000);
-                  }}
-                  className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#06B6D4] border border-[#27272A] transition-colors text-[9px] font-bold cursor-pointer"
-                >
-                  Pathao
-                </button>
-              </div>
+              <span className="text-[#A1A1AA]">Supported:</span>
+              <span className="text-[#06B6D4]">Steadfast, Pathao, RedX, Paperfly</span>
             </div>
 
             <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop your actual Courier remittance CSV">
@@ -600,7 +541,7 @@ export const DualFileReconcile: React.FC = () => {
 
             <div className="mt-2 text-center">
               <FileText className={`w-6 h-6 mx-auto ${trackBBankUploaded ? 'text-[#22C55E]' : 'text-[#A1A1AA]'}`} />
-              <div className="text-xs font-bold text-[#FFFFFF] font-mono mt-1 truncate" title={trackBBankFileName}>
+              <div className="text-xs font-bold text-[#FFFFFF] font-mono mt-1 truncate" title={trackBBankFileName || 'Bank Statement (Optional)'}>
                 {trackBBankUploaded ? trackBBankFileName : 'Bank statement (Optional)'}
               </div>
               <p className="text-[10px] text-[#A1A1AA] font-mono mt-0.5">
@@ -626,21 +567,7 @@ export const DualFileReconcile: React.FC = () => {
                   </button>
                 </>
               ) : (
-                <>
-                  <span className="text-[#A1A1AA]">Sample:</span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      uploadTrackBBankFile('City_Bank_Deposit_Sept08.csv');
-                      setUploadFeedback('Attached City Bank statement (Optional)');
-                      setTimeout(() => setUploadFeedback(null), 3000);
-                    }}
-                    className="px-2 py-0.5 rounded bg-[#121212] hover:bg-zinc-800 text-[#A1A1AA] hover:text-[#FFFFFF] border border-[#27272A] transition-colors text-[9px] font-bold z-10 cursor-pointer"
-                  >
-                    + Attach City Bank
-                  </button>
-                </>
+                <span className="text-[#A1A1AA]">City Bank, Dhaka Bank, EBL</span>
               )}
             </div>
 
@@ -661,7 +588,7 @@ export const DualFileReconcile: React.FC = () => {
         {uploadFeedback && (
           <div className="mt-3 px-3.5 py-2 rounded-xl bg-[#050505] border border-[#22C55E]/40 text-xs font-mono text-[#22C55E] flex items-center justify-between animate-fadeIn">
             <span>{uploadFeedback}</span>
-            <button onClick={() => setUploadFeedback(null)} className="text-[#A1A1AA] hover:text-[#FFFFFF]">✕</button>
+            <button onClick={() => setUploadFeedback(null)} className="text-[#A1A1AA] hover:text-[#FFFFFF] cursor-pointer">✕</button>
           </div>
         )}
 
@@ -699,17 +626,15 @@ export const DualFileReconcile: React.FC = () => {
         </div>
       </div>
 
-      {/* Synchronized Reconciled Audit Table */}
-      {trackBAuditExecuted && (
-        <UnifiedAuditResultsTable
-          currentCategory={userParsedResult ? "Custom Merchant Upload" : "Track B SME"}
-          rows={unifiedTrackBRows}
-          totalExpectedVolumeBDT={totalExpected}
-          totalSettledVolumeBDT={totalSettled}
-          totalVarianceGapBDT={totalVariance}
-          anomaliesCount={anomaliesCount}
-        />
-      )}
+      {/* Output Table: Always displays the output from the dropped files (or awaiting state if empty) */}
+      <UnifiedAuditResultsTable
+        currentCategory={userParsedResult ? "Custom Merchant Statement Output" : "Dual-File Statement Output"}
+        rows={unifiedTrackBRows}
+        totalExpectedVolumeBDT={totalExpected}
+        totalSettledVolumeBDT={totalSettled}
+        totalVarianceGapBDT={totalVariance}
+        anomaliesCount={anomaliesCount}
+      />
     </div>
   );
 };

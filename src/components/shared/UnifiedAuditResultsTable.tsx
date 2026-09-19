@@ -601,12 +601,23 @@ export const UnifiedAuditResultsTable: React.FC<UnifiedAuditResultsTableProps> =
           </table>
         </div>
 
-        {/* Empty state if filter yields zero */}
-        {filteredRows.length === 0 && (
+        {/* Empty state if filter yields zero or awaiting uploads */}
+        {rows.length === 0 ? (
+          <div className="p-12 text-center font-mono">
+            <div className="w-12 h-12 rounded-xl bg-[#050505] border border-[#FACC15]/40 text-[#FACC15] flex items-center justify-center mx-auto mb-3">
+              <Layers className="w-6 h-6 text-[#FACC15]" />
+            </div>
+            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Awaiting Statement Ingestion</h4>
+            <p className="text-xs text-[#A1A1AA] max-w-md mx-auto mt-1 leading-relaxed">
+              Drop your MFS statement (bKash / Nagad) and Courier remittance statement (Steadfast / Pathao / RedX) into the dropzones above.
+              Groq LLM will automatically parse messy column headers, extract order lines, and balance the ledger into this table.
+            </p>
+          </div>
+        ) : filteredRows.length === 0 ? (
           <div className="p-8 text-center text-[#A1A1AA] font-mono text-xs">
             No reconciliation rows match the selected category &amp; status filter.
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Row Forensic Inspection Modal in Unified Obsidian & Yellow Theme */}
