@@ -1,0 +1,6 @@
+{
+  "name": "TraceID Link - Intelligent FinTech Reconciliation Middleware",
+  "description": "Enterprise API & SME No-Code financial reconciliation middleware with automated 3-way cross-matching, high-contrast UI, and real-time reverse logistics barcode verification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
