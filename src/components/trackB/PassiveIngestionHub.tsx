@@ -136,18 +136,18 @@ export const PassiveIngestionHub: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <Send className="w-5 h-5 text-[#FACC15]" />
-            <h2 className="text-base font-bold text-[#FFFFFF] font-mono uppercase tracking-wide">
-              Track B: Passive Ingestion & Universal Parcel Dispatch
+            <h2 className="text-base font-bold text-[#FFFFFF] tracking-tight">
+              Order Ingestion & Dispatch
             </h2>
           </div>
           <p className="text-xs text-[#A1A1AA] mt-1">
-            Automated OTC merchant email scraping, single-click order assignment, and barcoded courier thermal shipping tags.
+            Payment receipt capture, order dispatch assignments, and barcode generation
           </p>
         </div>
 
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#050505] border border-[#27272A] text-xs font-mono text-[#22C55E]">
           <span className="h-2 w-2 rounded-full bg-[#22C55E] animate-pulse"></span>
-          <span>IMAP Listener: connected (port 993 SSL)</span>
+          <span>IMAP Listener: Active (port 993)</span>
         </div>
       </div>
 

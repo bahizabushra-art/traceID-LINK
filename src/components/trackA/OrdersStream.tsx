@@ -68,16 +68,16 @@ export const OrdersStream: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans">
-      {/* FORMULA SUMMARY BAR AT TOP */}
+      {/* Settlement Balance Equation */}
       <div className="bg-[#121212] border-2 border-[#FACC15] rounded-2xl p-5 shadow-xl shadow-black">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
               <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#FACC15] text-[#050505]">
-                MATHEMATICAL RECONCILIATION EQUATION
+                SETTLEMENT BALANCE
               </span>
               <span className="text-xs font-mono text-[#A1A1AA]">
-                Formula Verification Formula
+                Reconciliation Balance Check
               </span>
             </div>
             {/* Formula Expression */}

@@ -483,3 +483,20 @@ function parseNum(val: string): number {
   const num = parseFloat(val.replace(/[^0-9.-]/g, ''));
   return isNaN(num) ? 0 : num;
 }
+
+/**
+ * Synchronous pre-computed benchmark reconciliation result for Track B prototype evaluation
+ */
+export function getTrackBBenchmarkResult(): ParsedCsvResult {
+  const mfsStruct = localFallbackStructure(SAMPLE_MFS_CSV, 'mfs', 'bKash_Merchant_Benchmark_Sept08.csv');
+  const courierStruct = localFallbackStructure(SAMPLE_COURIER_CSV, 'courier', 'Steadfast_Remit_Benchmark_Sept08.csv');
+  return reconcileStructuredDatasets(
+    mfsStruct.records,
+    courierStruct.records,
+    'bKash_Merchant_Benchmark_Sept08.csv',
+    'Steadfast_Remit_Benchmark_Sept08.csv',
+    'Deterministic Benchmark Engine'
+  );
+}
+
+export const DEFAULT_TRACK_B_BENCHMARK_RESULT: ParsedCsvResult = getTrackBBenchmarkResult();

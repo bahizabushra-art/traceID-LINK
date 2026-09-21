@@ -259,19 +259,16 @@ export const ReturnPolicy: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs uppercase font-mono font-bold text-[#FACC15] tracking-wider">
-                  Page 4 of 5 • Reverse Logistics Terminal
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#050505] text-[#22C55E] border border-[#22C55E]/40">
-                  Universal Cross-Device Ready (Android, Tab, PC)
+                  Returns & Reverse Logistics
                 </span>
               </div>
               <h1 className="text-base sm:text-xl font-bold text-[#FFFFFF] tracking-tight">
-                Inbound Gate Barcode Terminal & 3-Vector Return Audit
+                Return Package Verification
               </h1>
             </div>
           </div>
           <p className="text-xs text-[#A1A1AA] max-w-3xl leading-relaxed">
-            Physical receiving gate scanner and forensic verification: scanning package barcodes anchors physical receipt, restocks inventory, and clears Ghost Return exceptions in real time.
+            Scan package barcodes to verify returned physical shipments, confirm courier delivery status, and resolve exceptions.
           </p>
         </div>
 

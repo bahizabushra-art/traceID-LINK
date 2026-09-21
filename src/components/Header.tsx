@@ -59,20 +59,18 @@ export const Header: React.FC = () => {
     switch (activePage) {
       case 'orders':
         return currentTrack === 'track-a' 
-          ? { title: 'Inbound Order Stream', sub: 'Real-Time Inbound Stream Across 4 Payment Combinations' }
-          : { title: 'Inbound Order Stream', sub: 'Passive IMAP Ingestion Feed & Universal Parcel Dispatch' };
+          ? { title: 'Orders', sub: 'Inbound sales and payment records' }
+          : { title: 'Orders', sub: 'Inbound sales and parcel dispatch' };
       case 'audit':
         return currentTrack === 'track-a'
-          ? { title: 'Reconciling Area', sub: 'Automated Midnight MFS Cron vs 3PL Courier Settlement Cross-Match' }
-          : { title: 'Reconciling Area', sub: 'Simultaneous Dual-File (MFS + 3PL Courier) Settlement Reconciliation' };
+          ? { title: 'Reconciliation', sub: 'Automated settlement and payout audit' }
+          : { title: 'Reconciliation', sub: 'Payment and courier statement reconciliation' };
       case 'reports':
-        return { title: '5-Table Reconciled Audit Center', sub: 'Comprehensive 5-Table Batch Output Center (6-Month Rolling Retention)' };
+        return { title: 'Reports', sub: 'Settlement archive and downloadable ledgers' };
       case 'returns':
-        return { title: 'Return Verification Terminal', sub: 'Reverse Logistics & Physical Store/Warehouse Scan Terminal' };
-      case 'security':
-        return { title: 'Data Security & TTL Retention', sub: 'Zero-Cloud Exposure & Automated 180-Day Partition Purge Engine' };
+        return { title: 'Returns', sub: 'Reverse logistics and return package verification' };
       default:
-        return { title: 'Reconciliation Middleware', sub: 'TraceID Link Production Suite' };
+        return { title: 'TraceID Link', sub: 'Settlement Reconciliation' };
     }
   };
 
@@ -95,7 +93,7 @@ export const Header: React.FC = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#FACC15]">
-                {currentTrack === 'track-a' ? 'TRACK A: ENTERPRISE API' : 'TRACK B: SME PORTAL'}
+                {currentTrack === 'track-a' ? 'TRACK A • ENTERPRISE' : 'TRACK B • MERCHANT'}
               </span>
               <span className="text-zinc-700 hidden sm:inline">•</span>
               <span className="text-[10px] font-mono text-[#A1A1AA] hidden sm:inline">
@@ -115,29 +113,29 @@ export const Header: React.FC = () => {
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Active Mode Badge */}
           <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-[#121212] border border-[#27272A] text-xs font-mono">
-            <span className="text-[#A1A1AA] mr-1.5 hidden sm:inline">Mode:</span>
+            <span className="text-[#A1A1AA] mr-1.5 hidden sm:inline">Track:</span>
             {currentTrack === 'track-a' ? (
               <span className="text-[#FACC15] font-bold flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#FACC15] animate-pulse"></span>
-                Track A (API Automation)
+                Track A (Enterprise)
               </span>
             ) : (
               <span className="text-[#FACC15] font-bold flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#FACC15] animate-pulse"></span>
-                Track B (Manual Upload)
+                Track B (Merchant)
               </span>
             )}
           </div>
 
-          {/* Global Quick Scan Return Barcode Button (SOLID YELLOW / BLACK TEXT) */}
+          {/* Quick Scan Return Barcode Button */}
           <button
             id="global-quick-scan-barcode-btn"
             onClick={() => setIsScanModalOpen(true)}
-            title="Scan Physical Return Barcode to verify and clear ghost exceptions"
-            className="px-3.5 py-2 rounded-lg bg-[#FACC15] hover:bg-[#EAB308] text-[#050505] font-mono text-xs font-bold tracking-tight shadow-md shadow-[#FACC15]/20 active:scale-[0.98] transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+            title="Scan return barcode to verify package"
+            className="px-3 py-1.5 rounded-lg bg-[#FACC15] hover:bg-[#EAB308] text-[#050505] font-mono text-xs font-bold tracking-tight shadow-md shadow-[#FACC15]/20 active:scale-[0.98] transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
           >
             <Camera className="w-4 h-4 stroke-[2.5]" />
-            <span className="tracking-wide">📷 QUICK SCAN RETURN BARCODE</span>
+            <span>Scan Return</span>
           </button>
 
           {/* Bank Sum Balance / Gap Status Pill */}
@@ -183,7 +181,7 @@ export const Header: React.FC = () => {
                 </span>
                 <span className="text-[9px] text-cyan-400/80 flex items-center gap-1 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Supabase Auth
+                  Verified Merchant
                 </span>
               </div>
             </div>
@@ -196,7 +194,7 @@ export const Header: React.FC = () => {
               await logout();
               setActivePage('login');
             }}
-            title="Log out of Supabase & Return to Login Gateway"
+            title="Sign Out & Return to Login Gateway"
             className="p-2 rounded-lg bg-[#121212] hover:bg-rose-950/40 border border-[#27272A] hover:border-rose-700/60 text-[#A1A1AA] hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1.5"
             aria-label="Logout"
           >

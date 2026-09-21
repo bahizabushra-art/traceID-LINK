@@ -272,15 +272,15 @@ export const ReconProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [dispatchedParcels, setDispatchedParcels] = useState<DispatchedParcel[]>(INITIAL_DISPATCHED_PARCELS);
   const [activeLabelModalParcel, setActiveLabelModalParcel] = useState<DispatchedParcel | null>(null);
   
-  // Track B Simultaneous Reconcile (Starts clean for app production mode)
-  const [trackBMfsUploaded, setTrackBMfsUploaded] = useState<boolean>(false);
-  const [trackBMfsFileName, setTrackBMfsFileName] = useState<string>('');
-  const [trackBCourierUploaded, setTrackBCourierUploaded] = useState<boolean>(false);
-  const [trackBCourierFileName, setTrackBCourierFileName] = useState<string>('');
+  // Track B Simultaneous Reconcile (Pre-loaded with benchmark fixed data for prototype evaluation)
+  const [trackBMfsUploaded, setTrackBMfsUploaded] = useState<boolean>(true);
+  const [trackBMfsFileName, setTrackBMfsFileName] = useState<string>('bKash_Merchant_Benchmark_Sept08.csv');
+  const [trackBCourierUploaded, setTrackBCourierUploaded] = useState<boolean>(true);
+  const [trackBCourierFileName, setTrackBCourierFileName] = useState<string>('Steadfast_Remit_Benchmark_Sept08.csv');
   const [trackBBankUploaded, setTrackBBankUploaded] = useState<boolean>(false);
   const [trackBBankFileName, setTrackBBankFileName] = useState<string>('');
   const [isTrackBAuditRunning, setIsTrackBAuditRunning] = useState<boolean>(false);
-  const [trackBAuditExecuted, setTrackBAuditExecuted] = useState<boolean>(false);
+  const [trackBAuditExecuted, setTrackBAuditExecuted] = useState<boolean>(true);
 
   const uploadTrackBMfsFile = useCallback((name: string) => {
     setTrackBMfsFileName(name);

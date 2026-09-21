@@ -320,18 +320,18 @@ export const CourierAuditArea: React.FC = () => {
               <div className="p-3 rounded-xl bg-[#050505] border border-[#27272A] text-[#FFFFFF] flex items-start gap-2.5 animate-pulse">
                 <Terminal className="w-4 h-4 shrink-0 mt-0.5 text-[#FACC15]" />
                 <div>
-                  <div className="font-bold text-[#FACC15]">[PASS 1: NLP EXTRACTION]</div>
-                  Containerized Local Llama-3 8B parsing courier CSV layout into JSON...
-                  <div className="text-[10px] text-[#A1A1AA] mt-1">Normalizing Pathao / Steadfast / RedX headers to ISO FinRecon schema</div>
+                  <div className="font-bold text-[#FACC15]">[STATEMENT PARSING]</div>
+                  Parsing courier CSV layout and normalizing transaction records...
+                  <div className="text-[10px] text-[#A1A1AA] mt-1">Normalizing Pathao / Steadfast / RedX headers to standard schema</div>
                 </div>
               </div>
 
               <div className="p-3 rounded-xl bg-[#050505] border border-[#27272A] text-[#FFFFFF] flex items-start gap-2.5">
                 <Cpu className="w-4 h-4 shrink-0 mt-0.5 text-[#22C55E]" />
                 <div>
-                  <div className="font-bold text-[#22C55E]">[PASS 2: DETERMINISTIC MATH]</div>
-                  Deterministic Regex &amp; Levenshtein Engine executing 3-way cross-match...
-                  <div className="text-[10px] text-[#A1A1AA] mt-1">Comparing MFS DB records vs courier settlement lines vs bank payouts</div>
+                  <div className="font-bold text-[#22C55E]">[CROSS-STATEMENT MATCHING]</div>
+                  Executing 3-way cross-match audit...
+                  <div className="text-[10px] text-[#A1A1AA] mt-1">Comparing payment gateway records vs courier settlement lines vs bank payouts</div>
                 </div>
               </div>
             </div>
@@ -603,7 +603,7 @@ export const CourierAuditArea: React.FC = () => {
         {/* Action Trigger Button */}
         <div className="mt-5 pt-4 border-t border-[#27272A] flex flex-wrap items-center justify-between gap-4">
           <div className="text-xs font-mono text-[#A1A1AA]">
-            Engine Config: <span className="text-[#FACC15] font-semibold">Dual-Pass Local Llama-3 8B NLP + Regex Levenshtein</span>
+            Engine Status: <span className="text-[#FACC15] font-semibold">Multi-Vector Settlement Audit Ready</span>
           </div>
 
           <button
@@ -612,7 +612,7 @@ export const CourierAuditArea: React.FC = () => {
             className="px-5 py-2.5 rounded-xl bg-[#FACC15] hover:bg-[#EAB308] text-[#050505] font-mono font-bold text-xs tracking-wide shadow-lg shadow-[#FACC15]/10 flex items-center gap-2 transition-all transform active:scale-95"
           >
             <Play className="w-4 h-4 fill-[#050505]" />
-            <span>Run Deterministic Multi-Vector Cross-Match Audit</span>
+            <span>Run Settlement Reconciliation</span>
           </button>
         </div>
       </div>

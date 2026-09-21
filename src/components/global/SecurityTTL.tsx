@@ -31,19 +31,19 @@ export const SecurityTTL: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-[#FACC15]" />
-              <h2 className="text-base font-bold text-[#FFFFFF] font-mono uppercase tracking-wide">
-                Data Security & TTL Retention Engine
+              <h2 className="text-base font-bold text-[#FFFFFF] tracking-tight">
+                Data Security & Retention
               </h2>
             </div>
             <p className="text-xs text-[#A1A1AA] mt-1 font-medium">
-              Zero-Cloud Exposure Sovereign Architecture & Automated 180-Day Partition Overwrite Engine
+              Encrypted local storage with scheduled 180-day audit retention policy
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="px-3 py-1.5 rounded-xl bg-[#050505] text-[#22C55E] border border-[#27272A] text-xs font-mono font-bold flex items-center gap-1.5">
               <Lock className="w-3.5 h-3.5" />
-              <span>TLS 1.3 + HMAC SHA-256</span>
+              <span>TLS 1.3 + SHA-256</span>
             </span>
           </div>
         </div>
@@ -52,17 +52,17 @@ export const SecurityTTL: React.FC = () => {
         <div className="mt-4 pt-4 border-t border-[#27272A] flex flex-wrap gap-2.5 font-mono text-xs">
           <div className="px-3 py-1.5 rounded-xl bg-[#050505] border border-[#FACC15]/40 text-[#FACC15] font-semibold flex items-center gap-2">
             <CheckCircle2 className="w-3.5 h-3.5 text-[#FACC15]" />
-            <span>6-Month Rolling Partition Active</span>
+            <span>6-Month Rolling Partition</span>
           </div>
 
           <div className="px-3 py-1.5 rounded-xl bg-[#050505] border border-[#22C55E]/40 text-[#22C55E] font-semibold flex items-center gap-2">
             <CheckCircle2 className="w-3.5 h-3.5 text-[#22C55E]" />
-            <span>Automated 180-Day TTL Overwrite Engine</span>
+            <span>Automated 180-Day Retention Schedule</span>
           </div>
 
           <div className="px-3 py-1.5 rounded-xl bg-[#050505] border border-cyan-800 text-[#06B6D4] font-semibold flex items-center gap-2">
             <CheckCircle2 className="w-3.5 h-3.5 text-[#06B6D4]" />
-            <span>Air-Gapped Sovereign Shadow DB</span>
+            <span>Encrypted Settlement Store</span>
           </div>
         </div>
       </div>

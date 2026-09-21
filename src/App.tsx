@@ -10,11 +10,8 @@ import { CourierAuditArea } from './components/trackA/CourierAuditArea';
 import { PassiveIngestionHub } from './components/trackB/PassiveIngestionHub';
 import { DualFileReconcile } from './components/trackB/DualFileReconcile';
 import { ReportsArchive } from './components/global/ReportsArchive';
-import { SecurityTTL } from './components/global/SecurityTTL';
 import { ReturnPolicy } from './components/ReturnPolicy';
 import { ShippingLabelModal } from './components/modals/ShippingLabelModal';
-import { ExecutiveDashboard } from './components/trackA/ExecutiveDashboard';
-import { PortalDashboard } from './components/trackB/PortalDashboard';
 
 const AppContent: React.FC = () => {
   const { 
@@ -30,7 +27,7 @@ const AppContent: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4">
         <div className="w-8 h-8 border-2 border-[#FACC15] border-t-transparent rounded-full animate-spin mb-3" />
-        <span className="text-xs font-mono text-[#A1A1AA]">Connecting to Supabase PostgreSQL Auth Cluster...</span>
+        <span className="text-xs font-mono text-[#A1A1AA]">Initializing Secure Merchant Session...</span>
       </div>
     );
   }
@@ -79,19 +76,6 @@ const AppContent: React.FC = () => {
       case 'return-policy':
       case 'track-b/warehouse':
         return <ReturnPolicy />;
-
-      // 5. Data Security & TTL Retention
-      case 'security':
-        return <SecurityTTL />;
-
-      // Executive & Performance Metrics Dashboard
-      case 'track-a/dashboard':
-        return <ExecutiveDashboard />;
-      case 'metrics':
-      case 'performance-metrics':
-        return <ExecutiveDashboard initialView="metrics" />;
-      case 'track-b/dashboard':
-        return <PortalDashboard />;
 
       default:
         return currentTrack === 'track-a' ? <OrdersStream /> : <PassiveIngestionHub />;

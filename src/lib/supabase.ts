@@ -46,4 +46,5 @@ export interface MerchantUser {
   merchantName?: string;
   organization?: string;
   lastSignInAt?: string;
+  isGuest?: boolean;
 }

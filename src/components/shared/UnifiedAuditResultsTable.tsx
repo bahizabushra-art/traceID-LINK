@@ -609,8 +609,7 @@ export const UnifiedAuditResultsTable: React.FC<UnifiedAuditResultsTableProps> =
             </div>
             <h4 className="text-sm font-bold text-white uppercase tracking-wider">Awaiting Statement Ingestion</h4>
             <p className="text-xs text-[#A1A1AA] max-w-md mx-auto mt-1 leading-relaxed">
-              Drop your MFS statement (bKash / Nagad) and Courier remittance statement (Steadfast / Pathao / RedX) into the dropzones above.
-              Groq LLM will automatically parse messy column headers, extract order lines, and balance the ledger into this table.
+              Upload your payment gateway and courier delivery remittance statements above to match transactions and balance ledger payouts.
             </p>
           </div>
         ) : filteredRows.length === 0 ? (

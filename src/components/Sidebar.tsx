@@ -7,15 +7,13 @@ import {
   FileCheck2, 
   Archive, 
   RotateCcw, 
-  ShieldCheck, 
   LogOut, 
   X, 
   Database,
   ArrowRight,
   Server,
   Store,
-  Sparkles,
-  PieChart as PieIcon
+  Sparkles
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -34,57 +32,39 @@ export const Sidebar: React.FC = () => {
   const ghostCount = returnParcels.filter(p => p.vector3GhostException && !p.scannedAtWarehouse).length;
 
   const unifiedNavItems = [
-    ...(currentTrack === 'track-a' ? [
-      {
-        id: 'track-a/dashboard' as ActivePage,
-        label: 'Executive & Performance Metrics',
-        subtext: 'Monthly Success Rates & Recharts',
-        icon: PieIcon,
-        badge: 'Pie Chart',
-        badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-      }
-    ] : []),
     {
       id: 'orders' as ActivePage,
-      label: 'Inbound Order Stream',
-      subtext: currentTrack === 'track-a' ? '4 Payment Combinations' : 'IMAP Feed & Dispatch',
+      label: 'Orders',
+      subtext: currentTrack === 'track-a' ? 'Payment streams' : 'Order dispatch',
       icon: Layers,
-      badge: 'LIVE',
+      badge: 'Live',
       badgeColor: 'bg-[#FACC15]/20 text-[#FACC15] border-[#FACC15]/40'
     },
     {
       id: 'audit' as ActivePage,
-      label: 'Reconciling Area',
-      subtext: currentTrack === 'track-a' ? 'Cron + Courier 3PL CSV' : 'Simultaneous Dual-File',
+      label: 'Reconciliation',
+      subtext: currentTrack === 'track-a' ? 'Automated audit' : 'Statement matching',
       icon: FileCheck2,
-      badge: currentTrack === 'track-a' ? '3-Vector' : 'Dual-File',
-      badgeColor: 'bg-zinc-800 text-zinc-300 border-zinc-700'
+      badge: undefined,
+      badgeColor: undefined
     },
     {
       id: 'reports' as ActivePage,
-      label: '5-Table Reconciled Audit Center',
-      subtext: 'Archive, Filters & Multi-CSV Export',
+      label: 'Reports',
+      subtext: 'Settlement archive',
       icon: Archive,
-      badge: '5 Tables',
-      badgeColor: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/40'
+      badge: undefined,
+      badgeColor: undefined
     },
     {
       id: 'returns' as ActivePage,
-      label: 'Return Verification Terminal',
-      subtext: 'Reverse Logistics & Gate Scanner',
+      label: 'Returns',
+      subtext: 'Reverse logistics',
       icon: RotateCcw,
-      badge: ghostCount > 0 ? `${ghostCount} Ghost Flag` : 'Verified',
+      badge: ghostCount > 0 ? `${ghostCount} Exception` : undefined,
       badgeColor: ghostCount > 0 
         ? 'bg-[#A855F7]/20 text-[#A855F7] border-[#A855F7]/40' 
         : 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/40'
-    },
-    {
-      id: 'security' as ActivePage,
-      label: 'Data Security & TTL Retention',
-      subtext: '6-Month Rolling Partition & Purge',
-      icon: ShieldCheck,
-      badge: '180d TTL',
-      badgeColor: 'bg-cyan-950 text-[#06B6D4] border-cyan-800'
     }
   ];
 
@@ -125,7 +105,7 @@ export const Sidebar: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 <span className="text-base font-extrabold text-[#FFFFFF] tracking-tight">TraceID Link</span>
               </div>
-              <p className="text-[11px] text-[#A1A1AA] font-mono truncate">FinTech Recon Middleware</p>
+              <p className="text-[11px] text-[#A1A1AA] font-mono truncate">Settlement Reconciliation</p>
             </div>
           </div>
 
@@ -139,26 +119,25 @@ export const Sidebar: React.FC = () => {
           )}
         </div>
 
-        {/* Suite Mode Switcher Toggle:
-            [ TRACK A: ENTERPRISE API HUB ] | [ TRACK B: SME PORTAL ] */}
-        <div className="mt-4 p-1 rounded-xl bg-[#121212] border border-[#27272A] grid grid-cols-2 gap-1 font-mono text-[11px]">
+        {/* Track Switcher: Track A (Enterprise) vs Track B (Merchant) */}
+        <div className="mt-4 p-1 rounded-xl bg-[#121212] border border-[#27272A] grid grid-cols-2 gap-1 text-[11px]">
           <button
             id="sidebar-toggle-track-a"
             type="button"
             onClick={() => {
               setCurrentTrack('track-a');
-              // Ensure we are on one of the unified pages
-              if (!['orders', 'audit', 'reports', 'returns', 'security'].includes(activePage)) {
+              if (!['orders', 'audit', 'reports', 'returns'].includes(activePage)) {
                 setActivePage('orders');
               }
             }}
-            className={`py-2 px-1.5 rounded-lg text-center transition-all cursor-pointer font-bold ${
+            className={`py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer ${
               currentTrack === 'track-a'
-                ? 'bg-[#FACC15] text-[#050505] shadow-sm'
+                ? 'bg-[#FACC15] text-[#050505] shadow-sm font-bold'
                 : 'text-[#A1A1AA] hover:text-[#FFFFFF] hover:bg-zinc-900'
             }`}
           >
-            TRACK A: API HUB
+            <div className="font-bold text-xs font-mono">Track A</div>
+            <div className="text-[10px] font-sans font-medium opacity-90 leading-tight">Enterprise</div>
           </button>
 
           <button
@@ -166,26 +145,27 @@ export const Sidebar: React.FC = () => {
             type="button"
             onClick={() => {
               setCurrentTrack('track-b');
-              if (!['orders', 'audit', 'reports', 'returns', 'security'].includes(activePage)) {
+              if (!['orders', 'audit', 'reports', 'returns'].includes(activePage)) {
                 setActivePage('orders');
               }
             }}
-            className={`py-2 px-1.5 rounded-lg text-center transition-all cursor-pointer font-bold ${
+            className={`py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer ${
               currentTrack === 'track-b'
-                ? 'bg-[#FACC15] text-[#050505] shadow-sm'
+                ? 'bg-[#FACC15] text-[#050505] shadow-sm font-bold'
                 : 'text-[#A1A1AA] hover:text-[#FFFFFF] hover:bg-zinc-900'
             }`}
           >
-            TRACK B: SME PORTAL
+            <div className="font-bold text-xs font-mono">Track B</div>
+            <div className="text-[10px] font-sans font-medium opacity-90 leading-tight">Merchant</div>
           </button>
         </div>
       </div>
 
-      {/* Unified Navigation Menu (IDENTICAL 5-Page Structure for both Track A & Track B) */}
+      {/* Navigation Menu */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5 custom-scrollbar">
         <div className="px-2 pb-2">
           <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#A1A1AA]">
-            Unified Workspaces
+            Navigation
           </span>
         </div>
 
@@ -256,7 +236,7 @@ export const Sidebar: React.FC = () => {
           <div className="p-2 rounded-lg bg-[#121E36]/80 border border-[#233B6B] text-[10px] font-mono">
             <div className="text-cyan-400 font-bold flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>SUPABASE AUTH:</span>
+              <span>MERCHANT ACCOUNT:</span>
             </div>
             <div className="text-slate-200 truncate mt-0.5" title={user.email}>
               {user.email}
