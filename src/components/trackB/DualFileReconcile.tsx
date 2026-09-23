@@ -17,6 +17,7 @@ import {
   ArrowRight,
   UserCheck
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { 
   parseAndReconcileUserFiles, 
   downloadCsvFile, 
@@ -60,62 +61,119 @@ export const DualFileReconcile: React.FC = () => {
   const [userParsedResult, setUserParsedResult] = useState<ParsedCsvResult | null>(null);
   const [hasExplicitlyCleared, setHasExplicitlyCleared] = useState<boolean>(false);
 
-  // Ingests custom user CSV/TXT files
+  // Helper to extract clean text/CSV from CSV, Excel (.xlsx, .xls) and PDF files
+  const extractFileContent = async (file: File): Promise<string> => {
+    const fileName = file.name.toLowerCase();
+
+    // 1. Handle Excel files (.xlsx, .xls)
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) throw new Error('Excel workbook contains no sheets');
+      const sheet = workbook.Sheets[firstSheetName];
+      return XLSX.utils.sheet_to_csv(sheet);
+    }
+
+    // 2. Handle PDF statement files
+    if (fileName.endsWith('.pdf')) {
+      const rawText = await file.text();
+      try {
+        const res = await fetch('/api/statements/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: rawText.substring(0, 50000), fileName: file.name })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.rows && data.rows.length > 0) {
+            const csvLines = [
+              'Date,Reference,TrxID,Description,Debit,Credit',
+              ...data.rows.map((r: any) => `${r.date || ''},${r.reference || ''},${r.trxId || ''},"${(r.description || '').replace(/"/g, '""')}",${r.debit || 0},${r.credit || 0}`)
+            ];
+            return csvLines.join('\n');
+          }
+        }
+      } catch (err) {
+        console.warn('PDF statement parsing error, falling back to text:', err);
+      }
+      return rawText;
+    }
+
+    // 3. Standard CSV / TSV / TXT
+    return await file.text();
+  };
+
+  // Ingests custom user CSV/Excel/PDF files
   const processUploadedFile = async (file: File, type: 'mfs' | 'courier' | 'bank') => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = (e.target?.result as string) || '';
-      
+    setIsProcessing(true);
+    setProcessingStatus(`Parsing ${file.name} format...`);
+
+    try {
+      const text = await extractFileContent(file);
+
       if (type === 'bank') {
         uploadTrackBBankFile(file.name);
-        setUploadFeedback(`Attached Bank Statement: ${file.name}`);
-        setTimeout(() => setUploadFeedback(null), 4000);
+        try {
+          const res = await fetch('/api/statements/parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text.substring(0, 50000), fileName: file.name })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const totalCredit = data.summary?.totalCredit || 0;
+            const rowsCount = data.summary?.rowCount || data.rows?.length || 0;
+            setUploadFeedback(`Attached Bank Statement: ${file.name} (${rowsCount} entries, BDT ${totalCredit.toLocaleString()} credits verified)`);
+          } else {
+            setUploadFeedback(`Attached Bank Statement: ${file.name}`);
+          }
+        } catch {
+          setUploadFeedback(`Attached Bank Statement: ${file.name}`);
+        }
+        setTimeout(() => setUploadFeedback(null), 4500);
         return;
       }
 
-      setIsProcessing(true);
-      setProcessingStatus(`Analyzing statement columns in ${file.name}...`);
+      setProcessingStatus(`Structuring records in ${file.name}...`);
 
-      try {
-        if (type === 'mfs') {
-          setCustomMfsContent(text);
-          uploadTrackBMfsFile(file.name);
-          setUploadFeedback(`Uploaded payment statement: ${file.name}`);
+      if (type === 'mfs') {
+        setCustomMfsContent(text);
+        uploadTrackBMfsFile(file.name);
+        setUploadFeedback(`Uploaded payment statement: ${file.name}`);
 
-          const courierText = customCourierContent || '';
-          if (courierText) {
-            setProcessingStatus('Matching payment and courier statements...');
-            const res = await parseAndReconcileUserFiles(text, courierText, file.name, trackBCourierFileName || 'courier_statement.csv');
-            setUserParsedResult(res);
-          } else {
-            const res = await parseAndReconcileUserFiles(text, '', file.name, 'Awaiting Courier Statement');
-            setUserParsedResult(res);
-          }
-        } else if (type === 'courier') {
-          setCustomCourierContent(text);
-          uploadTrackBCourierFile(file.name);
-          setUploadFeedback(`Uploaded courier remittance: ${file.name}`);
-
-          const mfsText = customMfsContent || '';
-          if (mfsText) {
-            setProcessingStatus('Matching payment and courier statements...');
-            const res = await parseAndReconcileUserFiles(mfsText, text, trackBMfsFileName || 'mfs_statement.csv', file.name);
-            setUserParsedResult(res);
-          } else {
-            const res = await parseAndReconcileUserFiles('', text, 'Awaiting Payment Statement', file.name);
-            setUserParsedResult(res);
-          }
+        const courierText = customCourierContent || '';
+        if (courierText) {
+          setProcessingStatus('Matching payment and courier statements...');
+          const res = await parseAndReconcileUserFiles(text, courierText, file.name, trackBCourierFileName || 'courier_statement.csv');
+          setUserParsedResult(res);
+        } else {
+          const res = await parseAndReconcileUserFiles(text, '', file.name, 'Awaiting Courier Statement');
+          setUserParsedResult(res);
         }
-      } catch (err: any) {
-        console.error('File parsing error:', err);
-        setUploadFeedback(`Error reading file: ${err.message}`);
-      } finally {
-        setIsProcessing(false);
-        setProcessingStatus('');
-        setTimeout(() => setUploadFeedback(null), 4000);
+      } else if (type === 'courier') {
+        setCustomCourierContent(text);
+        uploadTrackBCourierFile(file.name);
+        setUploadFeedback(`Uploaded courier remittance: ${file.name}`);
+
+        const mfsText = customMfsContent || '';
+        if (mfsText) {
+          setProcessingStatus('Matching payment and courier statements...');
+          const res = await parseAndReconcileUserFiles(mfsText, text, trackBMfsFileName || 'mfs_statement.csv', file.name);
+          setUserParsedResult(res);
+        } else {
+          const res = await parseAndReconcileUserFiles('', text, 'Awaiting Payment Statement', file.name);
+          setUserParsedResult(res);
+        }
       }
-    };
-    reader.readAsText(file);
+    } catch (err: any) {
+      console.error('File parsing error:', err);
+      setUploadFeedback(`Error reading file: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingStatus('');
+      setTimeout(() => setUploadFeedback(null), 4000);
+    }
   };
 
   const handleDropMfs = (e: React.DragEvent) => {
@@ -380,7 +438,7 @@ export const DualFileReconcile: React.FC = () => {
                 {trackBMfsFileName || 'Drop bKash / Nagad Statement'}
               </div>
               <p className="text-[11px] text-zinc-500 mt-0.5">
-                Drop CSV or click to browse
+                Drop CSV, Excel (.xlsx), or PDF
               </p>
             </div>
 
@@ -389,10 +447,10 @@ export const DualFileReconcile: React.FC = () => {
               <span className="text-zinc-300">bKash, Nagad, Upay, Rocket</span>
             </div>
 
-            <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop your actual MFS statement CSV">
+            <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop your actual MFS statement (CSV, Excel, PDF)">
               <input
                 type="file"
-                accept=".csv,.txt,.tsv"
+                accept=".csv,.txt,.tsv,.xlsx,.xls,.pdf"
                 onChange={e => {
                   if (e.target.files && e.target.files[0]) {
                     processUploadedFile(e.target.files[0], 'mfs');
@@ -430,10 +488,10 @@ export const DualFileReconcile: React.FC = () => {
             <div className="mt-3 text-center">
               <FileSpreadsheet className="w-6 h-6 text-cyan-400 mx-auto" />
               <div className="text-xs font-semibold text-white mt-1.5 truncate" title={trackBCourierFileName || 'Upload Courier Remittance'}>
-                {trackBCourierFileName || 'Drop Courier Remittance CSV'}
+                {trackBCourierFileName || 'Drop Courier Remittance Statement'}
               </div>
               <p className="text-[11px] text-zinc-500 mt-0.5">
-                Drop CSV or click to browse
+                Drop CSV, Excel (.xlsx), or PDF
               </p>
             </div>
 
@@ -442,10 +500,10 @@ export const DualFileReconcile: React.FC = () => {
               <span className="text-zinc-300">Steadfast, Pathao, RedX, Paperfly</span>
             </div>
 
-            <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop your actual Courier remittance CSV">
+            <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop your actual Courier remittance (CSV, Excel, PDF)">
               <input
                 type="file"
-                accept=".csv,.txt,.tsv"
+                accept=".csv,.txt,.tsv,.xlsx,.xls,.pdf"
                 onChange={e => {
                   if (e.target.files && e.target.files[0]) {
                     processUploadedFile(e.target.files[0], 'courier');
@@ -486,7 +544,7 @@ export const DualFileReconcile: React.FC = () => {
                 {trackBBankUploaded ? trackBBankFileName : 'Bank statement (Optional)'}
               </div>
               <p className="text-[11px] text-zinc-500 mt-0.5">
-                Optional 3-way check against bank credit
+                Optional 3-way check against bank credit (.csv, .xlsx, .pdf)
               </p>
             </div>
 
@@ -515,7 +573,7 @@ export const DualFileReconcile: React.FC = () => {
             <label className="absolute inset-0 cursor-pointer opacity-0" title="Click or drop to attach optional bank statement">
               <input
                 type="file"
-                accept=".csv,.txt,.tsv"
+                accept=".csv,.txt,.tsv,.xlsx,.xls,.pdf"
                 onChange={e => {
                   if (e.target.files && e.target.files[0]) {
                     processUploadedFile(e.target.files[0], 'bank');
