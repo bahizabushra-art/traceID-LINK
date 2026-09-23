@@ -101,55 +101,67 @@ export async function structureCsvWithGroq(
   }
 
   // 1. Try Groq API if GROQ_API_KEY is available
-  const groqApiKey = process.env.GROQ_API_KEY?.trim();
+  const rawGroqKey = process.env.GROQ_API_KEY?.trim() || '';
+  const groqApiKey = rawGroqKey.replace(/^["']|["']$/g, '').trim();
   if (groqApiKey) {
-    try {
-      const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: `Input File Name: ${fileName}\nExpected File Category Hint: ${fileType}\n\nRaw CSV Data:\n${rawCsv.slice(0, 18000)}`
-            }
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.1,
-          max_tokens: 4000
-        })
-      });
+    const candidateModels = [
+      process.env.GROQ_MODEL || 'qwen/qwen3.8-27b',
+      'llama-3.3-70b-versatile',
+      'openai/gpt-oss-120b'
+    ].filter(Boolean);
 
-      if (groqResponse.ok) {
-        const groqData = await groqResponse.json();
-        const contentStr = groqData.choices?.[0]?.message?.content;
-        if (contentStr) {
-          const parsed = JSON.parse(contentStr);
-          const records: StructuredRecord[] = Array.isArray(parsed.records) ? parsed.records : [];
-          const summary = calculateSummary(records);
+    for (const modelToTry of candidateModels) {
+      try {
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${groqApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: modelToTry,
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              {
+                role: 'user',
+                content: `Input File Name: ${fileName}\nExpected File Category Hint: ${fileType}\n\nRaw CSV Data:\n${rawCsv.slice(0, 16000)}`
+              }
+            ],
+            temperature: 0.1,
+            max_tokens: 3500
+          })
+        });
 
-          return {
-            success: true,
-            engineUsed: 'GROQ_LLAMA_3.3_70B',
-            modelName: 'llama-3.3-70b-versatile',
-            detectedType: parsed.detectedType || (fileType === 'mfs' ? 'MFS' : 'COURIER'),
-            detectedFormat: parsed.detectedFormat || 'Groq Normalized Statement',
-            processingTimeMs: Date.now() - startTime,
-            records,
-            summary
-          };
+        if (groqResponse.ok) {
+          const groqData = await groqResponse.json();
+          let contentStr = groqData.choices?.[0]?.message?.content || '';
+          // Strip potential markdown code block markers
+          if (contentStr.includes('```')) {
+            contentStr = contentStr.replace(/```(?:json)?/g, '').replace(/```/g, '').trim();
+          }
+          if (contentStr) {
+            const parsed = JSON.parse(contentStr);
+            const records: StructuredRecord[] = Array.isArray(parsed.records) ? parsed.records : [];
+            const summary = calculateSummary(records);
+
+            return {
+              success: true,
+              engineUsed: 'GROQ_LLAMA_3.3_70B',
+              modelName: modelToTry,
+              detectedType: parsed.detectedType || (fileType === 'mfs' ? 'MFS' : 'COURIER'),
+              detectedFormat: parsed.detectedFormat || `Groq (${modelToTry}) Structured Statement`,
+              processingTimeMs: Date.now() - startTime,
+              records,
+              summary
+            };
+          }
+        } else {
+          const errText = await groqResponse.text();
+          console.warn(`[Groq API ${modelToTry} Status ${groqResponse.status}]: ${errText.slice(0, 200)}`);
         }
-      } else {
-        const errText = await groqResponse.text();
-        console.warn(`[Groq API Warning] Status ${groqResponse.status}: ${errText.slice(0, 200)}`);
+      } catch (groqErr: any) {
+        console.warn(`[Groq API ${modelToTry} Error]:`, groqErr?.message);
       }
-    } catch (groqErr: any) {
-      console.warn('[Groq API Error] Encountered error, evaluating fallback:', groqErr?.message);
     }
   }
 
