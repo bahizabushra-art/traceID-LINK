@@ -37,10 +37,10 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'forgot' | 'recovery'>(
     isRecoveryMode ? 'recovery' : initialMode
   );
-  const [merchantName, setMerchantName] = useState('Dhaka Retail Enterprise Ltd');
-  const [email, setEmail] = useState('bahizabushra@gmail.com');
-  const [password, setPassword] = useState('SecureMerchant@2026');
-  const [confirmPassword, setConfirmPassword] = useState('SecureMerchant@2026');
+  const [merchantName, setMerchantName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<'track-a' | 'track-b'>('track-b');
   const [authStep, setAuthStep] = useState<string | null>(null);
@@ -297,7 +297,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
           {authMode === 'forgot' ? (
             <ForgotPassword
               compact
-              initialEmail={email || 'bahizabushra@gmail.com'}
+              initialEmail={email || ''}
               onBackToSignIn={() => handleSwitchMode('signin')}
               onNavigateToRecovery={() => handleSwitchMode('recovery')}
             />
@@ -484,23 +484,23 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ initialMode = 'signi
           {/* Sample Account Access */}
           {authMode !== 'forgot' && (
             <div className="mt-6 pt-4 border-t border-zinc-800 text-xs text-zinc-400">
-              <span className="block mb-2 text-zinc-500 font-medium">Sample Accounts:</span>
+              <span className="block mb-2 text-zinc-500 font-medium">Quick Demo Accounts (Optional):</span>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => handleQuickFill('bahizabushra@gmail.com', 'SecureMerchant@2026', 'track-a', 'Enterprise Hub')}
+                  onClick={() => handleQuickFill('enterprise@demo.bd', 'SecureMerchant@2026', 'track-a', 'Enterprise Hub')}
                   className="px-3 py-2 rounded-xl bg-black hover:bg-zinc-900 border border-zinc-800 text-amber-400 text-xs font-medium cursor-pointer text-left transition-colors"
                 >
-                  <div className="font-semibold">Track A</div>
-                  <div className="text-[10px] text-zinc-400">Enterprise</div>
+                  <div className="font-semibold">Track A Demo</div>
+                  <div className="text-[10px] text-zinc-400">Automated Pipeline</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleQuickFill('sme.finance@merchant.bd', 'DhakaFintech@2026', 'track-b', 'Merchant Store')}
                   className="px-3 py-2 rounded-xl bg-black hover:bg-zinc-900 border border-zinc-800 text-cyan-400 text-xs font-medium cursor-pointer text-left transition-colors"
                 >
-                  <div className="font-semibold">Track B</div>
-                  <div className="text-[10px] text-zinc-400">Merchant</div>
+                  <div className="font-semibold">Track B Demo</div>
+                  <div className="text-[10px] text-zinc-400">Statement Reconciler</div>
                 </button>
               </div>
             </div>

@@ -34,7 +34,7 @@ export interface ForgotPasswordProps {
 }
 
 export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
-  initialEmail = 'bahizabushra@gmail.com',
+  initialEmail = '',
   onBackToSignIn,
   onNavigateToRecovery,
   compact = false
@@ -339,7 +339,7 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={isLoading}
-                  placeholder="bahizabushra@gmail.com"
+                  placeholder="merchant@company.com"
                   className="w-full pl-10 pr-4 py-2.5 bg-black border border-zinc-800 rounded-xl text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all disabled:opacity-50"
                 />
               </div>
@@ -408,10 +408,10 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
               <button
                 type="button"
                 id="quick-fill-daraz-btn"
-                onClick={() => handleQuickFillEmail('bahizabushra@gmail.com')}
+                onClick={() => handleQuickFillEmail('enterprise@demo.bd')}
                 className="px-2 py-0.5 rounded bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-amber-400 text-[11px] text-amber-400 font-bold transition-colors cursor-pointer"
               >
-                bahizabushra@gmail.com
+                enterprise@demo.bd
               </button>
             </div>
 
@@ -474,10 +474,10 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
               <button
                 type="button"
                 id="quick-fill-daraz-btn"
-                onClick={() => handleQuickFillEmail('bahizabushra@gmail.com')}
+                onClick={() => handleQuickFillEmail('enterprise@demo.bd')}
                 className="px-2 py-0.5 rounded bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-amber-400 text-[11px] text-amber-400 font-bold transition-colors cursor-pointer"
               >
-                bahizabushra@gmail.com
+                enterprise@demo.bd
               </button>
               <button
                 type="button"

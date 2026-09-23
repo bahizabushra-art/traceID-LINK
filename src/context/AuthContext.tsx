@@ -34,7 +34,13 @@ const getLocalRegistry = (): Record<string, { password: string; name: string }> 
   try {
     const raw = localStorage.getItem(LOCAL_REGISTRY_KEY);
     const registry = raw ? JSON.parse(raw) : {};
-    // Pre-seed known owner account
+    // Pre-seed known demo and owner accounts
+    if (!registry['enterprise@demo.bd']) {
+      registry['enterprise@demo.bd'] = {
+        password: 'SecureMerchant@2026',
+        name: 'Enterprise Logistics Hub'
+      };
+    }
     if (!registry['bahizabushra@gmail.com']) {
       registry['bahizabushra@gmail.com'] = {
         password: 'SecureMerchant@2026',
@@ -44,6 +50,10 @@ const getLocalRegistry = (): Record<string, { password: string; name: string }> 
     return registry;
   } catch {
     return {
+      'enterprise@demo.bd': {
+        password: 'SecureMerchant@2026',
+        name: 'Enterprise Logistics Hub'
+      },
       'bahizabushra@gmail.com': {
         password: 'SecureMerchant@2026',
         name: 'Dhaka Retail Logistics'

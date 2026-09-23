@@ -44,7 +44,7 @@ export const ReportsArchive: React.FC = () => {
     reportBatches
   } = useRecon();
 
-  const merchantEmail = user?.email || 'bahizabushra@gmail.com';
+  const merchantEmail = user?.email || 'merchant@corporate.bd';
   const merchantCompany = user?.organization || user?.merchantName || 'Dhaka Multichannel Merchant Group';
 
   const [activeTableTab, setActiveTableTab] = useState<'T1' | 'T2' | 'T3' | 'T4' | 'T5'>('T1');
